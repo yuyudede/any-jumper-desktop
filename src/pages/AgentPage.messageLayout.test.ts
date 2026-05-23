@@ -59,7 +59,7 @@ describe("AgentPage transcript message layout", () => {
     const richComposerFocusBlock = css.match(/(?:^|\n)\.composer \.rich-composer-editor\.ProseMirror:focus(?:,\s*\n\.composer \.rich-composer-editor\.ProseMirror:focus-visible)?\s*\{(?<body>[^}]*)\}/)
       ?.groups?.body ?? "";
 
-    expect(css).not.toContain(".composer .rich-composer-editor .ProseMirror");
+    expect(css).toContain(".composer .rich-composer-editor .ProseMirror");
     expect(richComposerBlock).toContain("outline: none;");
     expect(richComposerFocusBlock).toContain("outline: none;");
   });
@@ -172,17 +172,16 @@ describe("AgentPage transcript message layout", () => {
     expect(source).not.toContain('className="task-list"');
   });
 
-  it("does not frame the agent workspace as a floating card", () => {
+  it("uses a rounded split-shell chrome for the agent workspace", () => {
     const css = readProjectFile("src/styles/theme.css");
     const workbenchBlock = css.match(/\.agent-workbench\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const shellBlock = css.match(/\.shadcn-agent-shell\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const mainPanelBlock = css.match(/\.content-grid\.is-agent-grid\s+\.main-panel\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
 
+    expect(workbenchBlock).toContain("border-radius");
+    expect(workbenchBlock).toContain("background: var(--panel);");
     expect(workbenchBlock).not.toContain("border:");
-    expect(workbenchBlock).not.toContain("border-radius");
     expect(workbenchBlock).not.toContain("box-shadow");
-    expect(shellBlock).not.toContain("border-radius");
-    expect(shellBlock).not.toContain("box-shadow");
     expect(mainPanelBlock).toContain("padding: 0;");
   });
 
@@ -211,14 +210,15 @@ describe("AgentPage transcript message layout", () => {
     expect(css).toContain("color: var(--panel);");
   });
 
-  it("does not render a right inspector rail or reserve a rail divider", () => {
+  it("replaces the inspector rail with a file panel toggle for chat sessions", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
     const css = readProjectFile("src/styles/theme.css");
 
     expect(source).not.toContain("agent-inspector-resizer");
     expect(source).not.toContain("agent-inspector-toggle");
-    expect(source).not.toContain("PanelRightOpen");
-    expect(source).not.toContain("PanelRightClose");
+    expect(source).toContain("agent-right-panel-toggle agent-side-control");
+    expect(source).toContain("PanelRightOpen");
+    expect(source).toContain("PanelRightClose");
     expect(css).not.toContain(".agent-inspector");
     expect(css).not.toContain(".agent-inspector-resizer");
   });

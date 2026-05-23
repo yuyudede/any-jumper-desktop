@@ -18,6 +18,8 @@ import {
   PanelBottomOpen,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelRightOpen,
+  PanelRightClose,
   Package,
   PauseCircle,
   Pencil,
@@ -86,6 +88,7 @@ import { Conversation, ConversationScrollButton } from "../components/conversati
 import { ResizeHandle } from "../components/ResizeHandle";
 import { WorkspaceFileTree } from "../components/WorkspaceFileTree";
 import { PreviewPanel, type PreviewFile } from "../components/PreviewPanel";
+import { RightPanel } from "../components/RightPanel";
 import ModelPage from "./ModelPage";
 import PluginPage from "./PluginPage";
 import { ProjectPicker } from "../components/ProjectPicker";
@@ -205,6 +208,24 @@ export default function AgentPage({
   const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
   const [activeMainView, setActiveMainView] = useState<ActiveMainView>("chat");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showArchivedThreads, setShowArchivedThreads] = useState(false);
+  const [rightPanelOpen, setRightPanelOpen] = useState(
+    () => localStorage.getItem("any-jumper-right-panel-open") === "true",
+  );
+  const [rightPanelWidth, setRightPanelWidth] = useState(() => {
+    const stored = localStorage.getItem("any-jumper-right-panel-width");
+    return stored ? Number(stored) : 300;
+  });
+  useEffect(() => {
+    const t = setTimeout(() => {
+      localStorage.setItem("any-jumper-right-panel-width", String(rightPanelWidth));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [rightPanelWidth]);
+
+  const handleSidebarResize = useCallback((delta: number) => {
+    setSidebarWidth((prev) => Math.min(480, Math.max(180, prev + delta)));
+  }, []);
   const [sidebarWidth, setSidebarWidth] = useState(284);
   const [pinnedThreadIds, setPinnedThreadIds] = useState<Set<string>>(() => {
     try {
@@ -214,11 +235,6 @@ export default function AgentPage({
       return new Set<string>();
     }
   });
-  const [showArchivedThreads, setShowArchivedThreads] = useState(false);
-
-  const handleSidebarResize = useCallback((delta: number) => {
-    setSidebarWidth((prev) => Math.min(480, Math.max(180, prev + delta)));
-  }, []);
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
@@ -1306,6 +1322,7 @@ export default function AgentPage({
           <ResizeHandle onResize={handleSidebarResize} />
         )}
 
+        <div className="agent-content-row">
         <section className="agent-main">
           <header className="agent-status-strip">
             <div className="agent-status-copy">
@@ -1363,6 +1380,18 @@ export default function AgentPage({
                   {terminalVisible ? <PanelBottomClose size={15} /> : <PanelBottomOpen size={15} />}
                 </IconButton>
               ) : null}
+              <IconButton
+                className={`agent-right-panel-toggle agent-side-control ${rightPanelOpen ? "is-active" : ""}`}
+                label={rightPanelOpen ? "收起右侧面板" : "展开右侧面板"}
+                aria-pressed={rightPanelOpen}
+                onClick={() => {
+                  const next = !rightPanelOpen;
+                  setRightPanelOpen(next);
+                  localStorage.setItem("any-jumper-right-panel-open", String(next));
+                }}
+              >
+                {rightPanelOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
+              </IconButton>
               {onToggleTheme ? (
                 <IconButton className="agent-theme-toggle" label={`切换到${themeMode === "dark" ? "浅色" : "深色"}主题`} onClick={onToggleTheme}>
                   {themeMode === "dark" ? <Sun size={14} /> : <Moon size={14} />}
@@ -1385,6 +1414,324 @@ export default function AgentPage({
           ) : activeMainView === "plugin" ? (
             <div className="model-config-inline">
               <PluginPage pushActivity={pushActivity} />
+            </div>
+          ) : previewOpen && previewFile ? (
+            <div className="agent-main-with-preview">
+              <div className="agent-main-chat">
+                <Conversation
+                  className={visibleItems.length === 0 ? "is-empty-home" : ""}
+                >
+                  {visibleItems.length === 0 ? (
+                    <AgentEmptyState
+                      activeWorkspace={activeWorkspace}
+                      threadReady={Boolean(threadId)}
+                      onPickSuggestion={(suggestion) => composerRef.current?.setComposer(suggestion)}
+                      onCreateWorkspace={openCreateWorkspace}
+                    />
+                  ) : (
+                  <>
+                    {visibleItems.map((item) => {
+                      const assistantDisplay = assistantDisplayParts(item);
+                      const displayContent = item.role === "assistant" ? assistantDisplay.content : userDisplayContent(item.content);
+                      const isEmpty = !displayContent.trim();
+                      const messageActionsDisabled = activeThread?.status === "running";
+                      const hasCopyableMessage = displayContent.trim().length > 0;
+                      const showUserActions = item.role === "user" && hasCopyableMessage;
+                      const showAssistantActions = item.role === "assistant" && hasCopyableMessage;
+                      const turnToolCalls = item.turnId ? toolCallsByTurn.get(item.turnId) || [] : [];
+                      const approvalCards = turnApprovalsForToolCalls(pendingApprovals, turnToolCalls);
+                      const progressNotes = item.turnId
+                        ? [...(progressNotesByTurn.get(item.turnId) || []), ...assistantDisplay.progressNotes]
+                        : assistantDisplay.progressNotes;
+                      const thinkingSection = thinkingTraceSectionForTurn({
+                        traceByTurn: thinkingTraceByTurn,
+                        turnId: item.turnId,
+                        turn: item.turnId ? turnsById.get(item.turnId) : undefined,
+                        toolCalls: turnToolCalls,
+                        progressNotes,
+                      });
+                      const toolCards = item.role === "assistant"
+                        ? buildToolTraceCardsForTurn({
+                          traceByTurn: toolTraceByTurn,
+                          turnId: item.turnId,
+                          toolCalls: turnToolCalls,
+                          toolCallEvents: item.turnId ? toolCallEventsByTurn.get(item.turnId) || [] : [],
+                        })
+                        : [];
+                      const showModelProcess =
+                        item.role === "assistant" &&
+                        Boolean(thinkingSection || toolCards.length > 0 || approvalCards.length > 0) &&
+                        (
+                          item.status === "running" ||
+                          thinkingSection?.status === "running" ||
+                          Boolean(thinkingSection?.items.length) ||
+                          toolCards.length > 0 ||
+                          approvalCards.length > 0
+                        );
+                      const modelProcessSection = thinkingSection || toolOnlyTraceSection(item.turnId, toolCards, approvalCards);
+                      const traceExpanded = modelProcessSection
+                        ? expandedTraceTurns[modelProcessSection.turnId] ?? defaultTurnTraceExpanded(modelProcessSection, approvalCards)
+                        : false;
+                      const messageStatus = (item.status as "running" | "completed" | "error" | "idle") || "completed";
+                      return (
+                        <Message key={item.id} id={item.id} role={item.role as "user" | "assistant" | "system"} status={messageStatus} isEmpty={isEmpty}>
+                          {showModelProcess && modelProcessSection ? (
+                            <TurnTracePanel
+                              expanded={traceExpanded}
+                              section={modelProcessSection}
+                              toolCards={toolCards}
+                              approvals={approvalCards}
+                              tokenUsage={item.turnId ? tokenUsageByTurn[item.turnId] : undefined}
+                              onToggle={() => toggleThinkingTrace(modelProcessSection, approvalCards)}
+                              onResolveApproval={resolveApproval}
+                            />
+                          ) : null}
+                          {displayContent.trim() || (item.images && item.images.length > 0) ? (
+                            <MessageBody>
+                              {displayContent.trim() ? (
+                                <MarkdownRenderer content={displayContent} streaming={item.status === "running"} />
+                              ) : null}
+                              {item.images && item.images.length > 0 ? (
+                                <MessageImageGrid images={item.images} />
+                              ) : null}
+                            </MessageBody>
+                          ) : null}
+                          {showUserActions ? (
+                            <MessageActions>
+                              <IconButton
+                                className="message-action-button"
+                                label="复制消息"
+                                onClick={() => void copyMessageContent(item)}
+                              >
+                                <Copy size={13} />
+                              </IconButton>
+                              <IconButton
+                                className="message-action-button"
+                                disabled={messageActionsDisabled}
+                                label="编辑并重试"
+                                onClick={() => openRetryEditor(item)}
+                              >
+                                <Pencil size={13} />
+                              </IconButton>
+                            </MessageActions>
+                          ) : null}
+                          {showAssistantActions ? (
+                            <MessageActions>
+                              <IconButton
+                                className="message-action-button"
+                                label="复制消息"
+                                onClick={() => void copyMessageContent(item)}
+                              >
+                                <Copy size={13} />
+                              </IconButton>
+                              <IconButton
+                                className="message-action-button"
+                                disabled={messageActionsDisabled}
+                                label="从这里分叉"
+                                onClick={() => void forkThreadFromItem(item)}
+                              >
+                                <GitBranch size={13} />
+                              </IconButton>
+                            </MessageActions>
+                          ) : null}
+                        </Message>
+                      );
+                    })}
+                  </>
+                )}
+                <ConversationScrollButton />
+              </Conversation>
+
+              <AgentComposer
+                ref={composerRef}
+                activeModelDisplayName={activeModel?.displayName || "Model"}
+                modelKeyMissing={modelKeyMissing}
+                permissionView={permissionView}
+                queueLength={detail?.queue.length || 0}
+                threadId={threadId}
+                workspaceId={workspaceId}
+                isRunning={activeThread?.status === "running"}
+                skills={skills}
+                onAttachFilesActivity={pushActivity}
+                onInterrupt={interrupt}
+                onModelSettingsOpen={openModelSettings}
+                onPermissionModeChange={setPermissionMode}
+                onSubmit={sendMessage}
+              />
+              <TerminalPanel
+                rootPath={activeWorkspace?.rootPath}
+                workspaceName={activeWorkspace?.name}
+                visible={terminalVisible}
+                onToggle={() => setTerminalVisible(false)}
+              />
+              </div>
+              <ResizeHandle onResize={handlePreviewResize} />
+              <div className="agent-main-preview">
+                <PreviewPanel
+                  file={previewFile}
+                  diff={null}
+                  onClose={handlePreviewClose}
+                />
+              </div>
+            </div>
+          ) : previewOpen && previewFile ? (
+            <div className="agent-main-with-preview">
+              <div className="agent-main-chat">
+                <Conversation
+                  className={visibleItems.length === 0 ? "is-empty-home" : ""}
+                >
+                  {visibleItems.length === 0 ? (
+                    <AgentEmptyState
+                      activeWorkspace={activeWorkspace}
+                      threadReady={Boolean(threadId)}
+                      onPickSuggestion={(suggestion) => composerRef.current?.setComposer(suggestion)}
+                      onCreateWorkspace={openCreateWorkspace}
+                    />
+                  ) : (
+                  <>
+                    {visibleItems.map((item) => {
+                      const assistantDisplay = assistantDisplayParts(item);
+                      const displayContent = item.role === "assistant" ? assistantDisplay.content : userDisplayContent(item.content);
+                      const isEmpty = !displayContent.trim();
+                      const messageActionsDisabled = activeThread?.status === "running";
+                      const hasCopyableMessage = displayContent.trim().length > 0;
+                      const showUserActions = item.role === "user" && hasCopyableMessage;
+                      const showAssistantActions = item.role === "assistant" && hasCopyableMessage;
+                      const turnToolCalls = item.turnId ? toolCallsByTurn.get(item.turnId) || [] : [];
+                      const approvalCards = turnApprovalsForToolCalls(pendingApprovals, turnToolCalls);
+                      const progressNotes = item.turnId
+                        ? [...(progressNotesByTurn.get(item.turnId) || []), ...assistantDisplay.progressNotes]
+                        : assistantDisplay.progressNotes;
+                      const thinkingSection = thinkingTraceSectionForTurn({
+                        traceByTurn: thinkingTraceByTurn,
+                        turnId: item.turnId,
+                        turn: item.turnId ? turnsById.get(item.turnId) : undefined,
+                        toolCalls: turnToolCalls,
+                        progressNotes,
+                      });
+                      const toolCards = item.role === "assistant"
+                        ? buildToolTraceCardsForTurn({
+                          traceByTurn: toolTraceByTurn,
+                          turnId: item.turnId,
+                          toolCalls: turnToolCalls,
+                          toolCallEvents: item.turnId ? toolCallEventsByTurn.get(item.turnId) || [] : [],
+                        })
+                        : [];
+                      const showModelProcess =
+                        item.role === "assistant" &&
+                        Boolean(thinkingSection || toolCards.length > 0 || approvalCards.length > 0) &&
+                        (
+                          item.status === "running" ||
+                          thinkingSection?.status === "running" ||
+                          Boolean(thinkingSection?.items.length) ||
+                          toolCards.length > 0 ||
+                          approvalCards.length > 0
+                        );
+                      const modelProcessSection = thinkingSection || toolOnlyTraceSection(item.turnId, toolCards, approvalCards);
+                      const traceExpanded = modelProcessSection
+                        ? expandedTraceTurns[modelProcessSection.turnId] ?? defaultTurnTraceExpanded(modelProcessSection, approvalCards)
+                        : false;
+                      const messageStatus = (item.status as "running" | "completed" | "error" | "idle") || "completed";
+                      return (
+                        <Message key={item.id} id={item.id} role={item.role as "user" | "assistant" | "system"} status={messageStatus} isEmpty={isEmpty}>
+                          {showModelProcess && modelProcessSection ? (
+                            <TurnTracePanel
+                              expanded={traceExpanded}
+                              section={modelProcessSection}
+                              toolCards={toolCards}
+                              approvals={approvalCards}
+                              tokenUsage={item.turnId ? tokenUsageByTurn[item.turnId] : undefined}
+                              onToggle={() => toggleThinkingTrace(modelProcessSection, approvalCards)}
+                              onResolveApproval={resolveApproval}
+                            />
+                          ) : null}
+                          {displayContent.trim() || (item.images && item.images.length > 0) ? (
+                            <MessageBody>
+                              {displayContent.trim() ? (
+                                <MarkdownRenderer content={displayContent} streaming={item.status === "running"} />
+                              ) : null}
+                              {item.images && item.images.length > 0 ? (
+                                <MessageImageGrid images={item.images} />
+                              ) : null}
+                            </MessageBody>
+                          ) : null}
+                          {showUserActions ? (
+                            <MessageActions>
+                              <IconButton
+                                className="message-action-button"
+                                label="复制消息"
+                                onClick={() => void copyMessageContent(item)}
+                              >
+                                <Copy size={13} />
+                              </IconButton>
+                              <IconButton
+                                className="message-action-button"
+                                disabled={messageActionsDisabled}
+                                label="编辑并重试"
+                                onClick={() => openRetryEditor(item)}
+                              >
+                                <Pencil size={13} />
+                              </IconButton>
+                            </MessageActions>
+                          ) : null}
+                          {showAssistantActions ? (
+                            <MessageActions>
+                              <IconButton
+                                className="message-action-button"
+                                label="复制消息"
+                                onClick={() => void copyMessageContent(item)}
+                              >
+                                <Copy size={13} />
+                              </IconButton>
+                              <IconButton
+                                className="message-action-button"
+                                disabled={messageActionsDisabled}
+                                label="从这里分叉"
+                                onClick={() => void forkThreadFromItem(item)}
+                              >
+                                <GitBranch size={13} />
+                              </IconButton>
+                            </MessageActions>
+                          ) : null}
+                        </Message>
+                      );
+                    })}
+                  </>
+                )}
+                <ConversationScrollButton />
+              </Conversation>
+
+              <AgentComposer
+                ref={composerRef}
+                activeModelDisplayName={activeModel?.displayName || "Model"}
+                modelKeyMissing={modelKeyMissing}
+                permissionView={permissionView}
+                queueLength={detail?.queue.length || 0}
+                threadId={threadId}
+                workspaceId={workspaceId}
+                isRunning={activeThread?.status === "running"}
+                skills={skills}
+                onAttachFilesActivity={pushActivity}
+                onInterrupt={interrupt}
+                onModelSettingsOpen={openModelSettings}
+                onPermissionModeChange={setPermissionMode}
+                onSubmit={sendMessage}
+              />
+              <TerminalPanel
+                rootPath={activeWorkspace?.rootPath}
+                workspaceName={activeWorkspace?.name}
+                visible={terminalVisible}
+                onToggle={() => setTerminalVisible(false)}
+              />
+              </div>
+              <ResizeHandle onResize={handlePreviewResize} />
+              <div className="agent-main-preview">
+                <PreviewPanel
+                  file={previewFile}
+                  diff={null}
+                  onClose={handlePreviewClose}
+                />
+              </div>
             </div>
           ) : previewOpen && previewFile ? (
             <div className="agent-main-with-preview">
@@ -1696,6 +2043,54 @@ export default function AgentPage({
             </>
           )}
         </section>
+
+        {rightPanelOpen && activeWorkspace ? (
+          <>
+            <div
+              className="agent-right-resize"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                const panelEl =
+                  (e.currentTarget as HTMLElement)
+                    .nextElementSibling as HTMLElement | null;
+                if (!panelEl) return;
+                const startX = e.clientX;
+                const startWidth = panelEl.offsetWidth;
+                document.body.style.cursor = "col-resize";
+                document.body.style.userSelect = "none";
+                const onMove = (ev: MouseEvent) => {
+                  const delta = ev.clientX - startX;
+                  const next = Math.min(
+                    480,
+                    Math.max(220, startWidth - delta),
+                  );
+                  panelEl.style.width = `${next}px`;
+                };
+                const onUp = () => {
+                  document.body.style.cursor = "";
+                  document.body.style.userSelect = "";
+                  document.removeEventListener("mousemove", onMove);
+                  document.removeEventListener("mouseup", onUp);
+                  const finalWidth = parseInt(panelEl.style.width, 10);
+                  if (!isNaN(finalWidth)) {
+                    setRightPanelWidth(finalWidth);
+                  }
+                };
+                document.addEventListener("mousemove", onMove);
+                document.addEventListener("mouseup", onUp);
+              }}
+            />
+            <RightPanel
+              rootPath={activeWorkspace.rootPath}
+              width={rightPanelWidth}
+              onClose={() => {
+                setRightPanelOpen(false);
+                localStorage.setItem("any-jumper-right-panel-open", "false");
+              }}
+            />
+          </>
+        ) : null}
+        </div>
 
         <ModelSettingsDialog
           activeModel={activeModel}

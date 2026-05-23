@@ -103,8 +103,8 @@ describe("App navigation shell", () => {
     expect(source).toContain("PanelLeftClose");
     expect(source).toContain("PanelBottomOpen");
     expect(source).toContain("PanelBottomClose");
-    expect(source).not.toContain("PanelRightOpen");
-    expect(source).not.toContain("PanelRightClose");
+    expect(source).toContain("PanelRightOpen");
+    expect(source).toContain("PanelRightClose");
     expect(source).toContain("aria-pressed={!sidebarCollapsed}");
     expect(source).toContain("aria-pressed={terminalVisible}");
     expect(source).not.toContain("aria-pressed={!inspectorCollapsed}");
@@ -112,7 +112,9 @@ describe("App navigation shell", () => {
     expect(headerActionsIndex).toBeGreaterThan(-1);
     expect(sidebarToggleIndex).toBeGreaterThan(headerActionsIndex);
     expect(terminalToggleIndex).toBeGreaterThan(sidebarToggleIndex);
-    expect(themeToggleIndex).toBeGreaterThan(terminalToggleIndex);
+    const rightPanelToggleIndex = source.indexOf("agent-right-panel-toggle agent-side-control");
+    expect(rightPanelToggleIndex).toBeGreaterThan(terminalToggleIndex);
+    expect(themeToggleIndex).toBeGreaterThan(rightPanelToggleIndex);
     expect(themeToggleIndex).toBeLessThan(composerActionsIndex);
     expect(css).toContain("--window-control-safe-width");
     expect(css).toContain("padding-left: calc(var(--window-control-safe-width) + 12px);");
@@ -205,11 +207,11 @@ describe("App navigation shell", () => {
     expect(css).toContain("--agent-window-radius: 24px;");
     expect(css).toContain(".app-shell.is-agent-active");
     expect(css).toContain("padding: var(--agent-shell-gap);");
-    expect(css).toContain("background: var(--app-chrome-bg);");
+    expect(css).toContain("var(--app-chrome-bg)");
     expect(css).toContain("border-radius: var(--agent-window-radius);");
     expect(css).toContain("border-radius: var(--agent-panel-radius);");
     const workbenchBlock = css.match(/\.agent-workbench\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
-    expect(workbenchBlock).toContain("background: transparent;");
+    expect(workbenchBlock).toContain("background: var(--panel);");
     const resizeHandleBlock = css.match(/\.resize-handle\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     expect(resizeHandleBlock).toContain("background: transparent;");
     expect(resizeHandleBlock).not.toContain("background: var(--agent-gutter);");
@@ -257,11 +259,12 @@ describe("App navigation shell", () => {
     expect(css).not.toContain("var(--agent-inspector-width");
   });
 
-  it("does not show an inspector toggle for chat sessions", () => {
+  it("uses a file panel toggle instead of an inspector toggle for chat sessions", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
 
     expect(source).not.toContain("agent-inspector-toggle agent-side-control");
-    expect(source).not.toContain("PanelRightOpen");
-    expect(source).not.toContain("PanelRightClose");
+    expect(source).toContain("agent-right-panel-toggle agent-side-control");
+    expect(source).toContain("PanelRightOpen");
+    expect(source).toContain("PanelRightClose");
   });
 });

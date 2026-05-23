@@ -1,5 +1,7 @@
-import { useState, useMemo, memo, useCallback } from "react";
+import { useState, useMemo, memo, useCallback, useEffect, useRef } from "react";
 import { X, Columns2, Rows3, FileCode, FolderOpen } from "lucide-react";
+import { codeToTokens } from "shiki";
+import type { BundledLanguage, ThemedToken } from "shiki";
 
 export interface PreviewFile {
   path: string;
@@ -189,24 +191,148 @@ function DiffSplitView({ diffLines }: { diffLines: DiffLine[] }) {
   );
 }
 
+function getLanguageFromPath(path: string): BundledLanguage {
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  const langMap: Record<string, BundledLanguage> = {
+    ts: "typescript",
+    tsx: "tsx",
+    js: "javascript",
+    jsx: "jsx",
+    json: "json",
+    css: "css",
+    scss: "scss",
+    html: "html",
+    md: "markdown",
+    markdown: "markdown",
+    py: "python",
+    rs: "rust",
+    go: "go",
+    java: "java",
+    c: "c",
+    cpp: "cpp",
+    h: "c",
+    hpp: "cpp",
+    sh: "bash",
+    bash: "bash",
+    zsh: "bash",
+    yml: "yaml",
+    yaml: "yaml",
+    toml: "toml",
+    xml: "xml",
+    sql: "sql",
+    graphql: "graphql",
+    vue: "vue",
+    svelte: "svelte",
+    rb: "ruby",
+    php: "php",
+    swift: "swift",
+    kt: "kotlin",
+    scala: "scala",
+    dart: "dart",
+    lua: "lua",
+    r: "r",
+    dockerfile: "dockerfile",
+    tex: "latex",
+    proto: "protobuf",
+  };
+  return langMap[ext] || "text";
+}
+
+function fontStyleToCSS(style: unknown): string | undefined {
+  if (style === undefined || style === null) return undefined;
+  const s = style as number;
+  const parts: string[] = [];
+  if (s & 1) parts.push("italic");
+  if (s & 2) parts.push("bold");
+  if (s & 4) parts.push("underline");
+  return parts.length > 0 ? parts.join(" ") : undefined;
+}
+
 function FilePreview({ file }: { file: PreviewFile }) {
-  const lines = file.content.split("\n");
+  const [tokens, setTokens] = useState<ThemedToken[][]>([]);
+  const abortRef = useRef(false);
+
+  const lines = useMemo(() => file.content.split("\n"), [file.content]);
+  const lang = file.language || getLanguageFromPath(file.path);
+
+  useEffect(() => {
+    let cancelled = false;
+    abortRef.current = false;
+
+    async function run() {
+      try {
+        const isDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+        const result = await codeToTokens(file.content, {
+          lang: lang as BundledLanguage,
+          theme: isDark ? "github-dark" : "github-light",
+        });
+        if (!cancelled && !abortRef.current) {
+          setTokens(result.tokens);
+        }
+      } catch {
+        if (!cancelled && !abortRef.current) {
+          setTokens([]);
+        }
+      }
+    }
+
+    void run();
+
+    const onThemeChange = () => {
+      void run();
+    };
+    window.addEventListener("any-jumper-theme-change", onThemeChange);
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    media?.addEventListener("change", onThemeChange);
+
+    return () => {
+      cancelled = true;
+      abortRef.current = true;
+      window.removeEventListener("any-jumper-theme-change", onThemeChange);
+      media?.removeEventListener("change", onThemeChange);
+    };
+  }, [file.content, lang]);
+
+  const highlighted = tokens.length > 0;
 
   return (
     <div className="preview-file-content">
       <div className="preview-file-header">
         <FileCode size={14} />
         <span className="preview-file-path">{file.path}</span>
+        <span className="preview-file-lang">{lang}</span>
         <span className="preview-file-meta">{lines.length} 行</span>
       </div>
       <pre className="preview-file-code">
         <code>
-          {lines.map((line, i) => (
-            <div key={i} className="preview-file-line">
-              <span className="preview-file-ln">{i + 1}</span>
-              <span>{line}</span>
-            </div>
-          ))}
+          {lines.map((rawLine, i) => {
+            const lineTokens = tokens[i];
+            return (
+              <div key={i} className="preview-file-line">
+                <span className="preview-file-ln">{i + 1}</span>
+                <span className="preview-file-line-content">
+                  {highlighted && lineTokens ? (
+                    lineTokens.map((token, j) => (
+                      <span
+                        key={j}
+                        style={{
+                          color: token.color,
+                          fontStyle: fontStyleToCSS(token.fontStyle),
+                          fontWeight: fontStyleToCSS(token.fontStyle)?.includes("bold")
+                            ? "bold"
+                            : undefined,
+                        }}
+                      >
+                        {token.content}
+                      </span>
+                    ))
+                  ) : (
+                    rawLine
+                  )}
+                </span>
+              </div>
+            );
+          })}
         </code>
       </pre>
     </div>

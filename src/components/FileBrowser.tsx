@@ -99,6 +99,7 @@ export const FileBrowser = memo(function FileBrowser({
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [childrenVersion, setChildrenVersion] = useState(0);
   const editInputRef = useRef<HTMLInputElement>(null);
   const treeRef = useRef<HTMLDivElement>(null);
 
@@ -127,6 +128,8 @@ export const FileBrowser = memo(function FileBrowser({
         setExpandedIds(next);
         if (node.hasChildren && onExpand && (!node.children || node.children.length === 0)) {
           await onExpand(node);
+          // Force re-render now that node.children has been mutated by onExpand
+          setChildrenVersion((v) => v + 1);
         }
       }
     },
