@@ -81,21 +81,29 @@ describe("AgentPage transcript message layout", () => {
       ?.groups?.body ?? "";
     const panelBeforeBlock = css.match(/(?:^|\n)\.scroll-minimap-panel::before\s*\{(?<body>[^}]*)\}/)
       ?.groups?.body ?? "";
+    const panelAfterBlock = css.match(/(?:^|\n)\.scroll-minimap-panel::after\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
 
     expect(css).toContain("--scroll-minimap-glass-bg:");
     expect(css).toContain("--scroll-minimap-glass-border:");
-    expect(css).toContain("rgba(160, 168, 172, 0.58)");
-    expect(css).toContain("rgba(132, 140, 145, 0.50)");
+    expect(css).toContain("rgba(255, 255, 255, 0.17)");
+    expect(css).toContain("rgba(236, 243, 249, 0.09)");
+    expect(css).toContain("rgba(190, 207, 222, 0.13)");
+    expect(css).not.toContain("rgba(160, 168, 172, 0.58)");
+    expect(css).not.toContain("rgba(132, 140, 145, 0.50)");
     expect(css).not.toContain("rgba(106, 146, 178, 0.82)");
     expect(css).not.toContain("rgba(65, 105, 136, 0.76)");
     expect(panelBlock).toContain("background: var(--scroll-minimap-glass-bg);");
-    expect(panelBlock).toContain("backdrop-filter: blur(26px) saturate(150%) contrast(104%);");
+    expect(panelBlock).toContain("backdrop-filter: blur(18px) saturate(180%) contrast(110%) brightness(105%);");
     expect(panelBlock).toContain("border-radius: 22px;");
     expect(panelBlock).toContain("border: 1px solid var(--scroll-minimap-glass-border);");
     expect(panelBlock).toContain("box-shadow:");
     expect(panelBlock).toContain("overflow: hidden;");
     expect(panelBeforeBlock).toContain("background:");
     expect(panelBeforeBlock).toContain("box-shadow: inset 0 1px 0 var(--scroll-minimap-glass-inner);");
+    expect(panelAfterBlock).toContain("linear-gradient(120deg");
+    expect(panelAfterBlock).toContain("linear-gradient(300deg");
+    expect(panelAfterBlock).toContain("opacity: 0.82;");
   });
 
   it("keeps keyboard-selected slash command suggestions scrolled into view", () => {
@@ -290,16 +298,17 @@ describe("AgentPage transcript message layout", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
     const css = readProjectFile("src/styles/theme.css");
     const footBlock = css.match(/(?:^|\n)\.agent-sidebar-foot\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
-    const footMainBlock = css.match(/(?:^|\n)\.agent-sidebar-foot-main\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
-    const footActionsBlock = css.match(/(?:^|\n)\.agent-sidebar-foot-actions\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const footLabelBlock = css.match(/(?:^|\n)\.agent-sidebar-foot-label\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const footPathBlock = css.match(/(?:^|\n)\.agent-sidebar-foot-path\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const footCopyBlock = css.match(/(?:^|\n)\.agent-sidebar-foot-copy\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const themeButtonBlock = css.match(/(?:^|\n)\.agent-sidebar-theme-toggle\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const miniRailBlock = css.match(/(?:^|\n)\.agent-workbench\.is-sidebar-collapsed \.agent-mini-rail\s*\{(?<body>[^}]*)\}/)
       ?.groups?.body ?? "";
     const miniSpacerBlock = css.match(/(?:^|\n)\.agent-mini-rail-spacer\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const cornerButtonBlock = css.match(/(?:^|\n)\.agent-corner-theme-toggle\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
 
-    expect(source).toContain("agent-sidebar-foot-actions");
-    expect(source).toContain("agent-sidebar-foot-main");
+    expect(source).toContain("agent-sidebar-foot-label");
+    expect(source).toContain("agent-sidebar-foot-path");
     expect(source).toContain("agent-sidebar-theme-toggle");
     expect(source).toContain("agent-mini-rail-theme-toggle");
     expect(source).toContain("agent-corner-theme-toggle");
@@ -307,14 +316,19 @@ describe("AgentPage transcript message layout", () => {
     expect(source.indexOf("agent-sidebar-theme-toggle")).toBeLessThan(source.indexOf("agent-sidebar-foot-copy"));
     expect(source).not.toContain('<span>{themeMode === "dark" ? "浅色" : "深色"}</span>');
     expect(footBlock).toContain("margin-top: auto;");
-    expect(footBlock).toContain("align-items: flex-end;");
-    expect(footMainBlock).toContain("flex-direction: column;");
-    expect(footMainBlock).toContain("flex: 1 1 auto;");
-    expect(footActionsBlock).toContain("display: flex;");
-    expect(footActionsBlock).toContain("flex-direction: column;");
-    expect(footActionsBlock).toContain("align-items: center;");
+    expect(footBlock).toContain("display: grid;");
+    expect(footBlock).toContain("grid-template-columns: minmax(0, 1fr) 24px;");
+    expect(footBlock).toContain("grid-template-rows: 24px 24px;");
+    expect(footLabelBlock).toContain("display: inline-flex;");
+    expect(footLabelBlock).toContain("min-width: 0;");
+    expect(footPathBlock).toContain("grid-column: 1;");
+    expect(footPathBlock).toContain("grid-row: 2;");
+    expect(footCopyBlock).toContain("grid-column: 2;");
+    expect(footCopyBlock).toContain("grid-row: 2;");
     expect(themeButtonBlock).toContain("width: 24px;");
     expect(themeButtonBlock).toContain("height: 24px;");
+    expect(themeButtonBlock).toContain("grid-column: 2;");
+    expect(themeButtonBlock).toContain("grid-row: 1;");
     expect(themeButtonBlock).toContain("justify-content: center;");
     expect(themeButtonBlock).toContain("padding: 0;");
     expect(themeButtonBlock).toContain("background: transparent;");
@@ -339,6 +353,44 @@ describe("AgentPage transcript message layout", () => {
     expect(compactMedia).not.toContain(".agent-inspector");
     expect(composerLeftBlock).toContain("display: flex;");
     expect(composerLeftBlock).toContain("flex-wrap: wrap;");
+  });
+
+  it("does not reserve an empty sidebar column after hiding the sidebar on compact windows", () => {
+    const css = readProjectFile("src/styles/theme.css");
+    const compactMedia = css.match(/@media\s*\(max-width:\s*1180px\)\s*\{(?<body>[\s\S]*?)@media\s*\(max-width:\s*760px\)/)
+      ?.groups?.body ?? "";
+    const workbenchBlock = compactMedia.match(/\.agent-workbench\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const sidebarBlock = compactMedia.match(/\.agent-sidebar\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+
+    expect(sidebarBlock).toContain("display: none;");
+    expect(workbenchBlock).toContain("grid-template-columns: minmax(0, 1fr);");
+    expect(workbenchBlock).not.toContain("var(--agent-sidebar-width)");
+  });
+
+  it("does not reserve the removed sidebar resize column when the sidebar is collapsed", () => {
+    const source = readProjectFile("src/pages/AgentPage.tsx");
+    const css = readProjectFile("src/styles/theme.css");
+    const collapsedWorkbenchBlock = css.match(/(?:^|\n)\.agent-workbench\.is-sidebar-collapsed\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+
+    expect(source).toContain("{!sidebarCollapsed && (\n          <ResizeHandle onResize={handleSidebarResize} />\n        )}");
+    expect(collapsedWorkbenchBlock).toContain("grid-template-columns: 60px minmax(0, 1fr);");
+    expect(collapsedWorkbenchBlock).not.toContain("60px auto minmax(560px, 1fr)");
+  });
+
+  it("does not reserve a hidden right panel column on compact windows", () => {
+    const css = readProjectFile("src/styles/theme.css");
+    const compactMedia = css.match(/@media\s*\(max-width:\s*1180px\)\s*\{(?<body>[\s\S]*?)@media\s*\(max-width:\s*760px\)/)
+      ?.groups?.body ?? "";
+    const contentRowWithPanelBlock = compactMedia.match(/\.agent-content-row\.has-right-panel\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+    const rightPanelBlock = compactMedia.match(/\.agent-right-panel\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const rightResizeBlock = compactMedia.match(/\.agent-right-resize\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+
+    expect(rightPanelBlock).toContain("display: none;");
+    expect(rightResizeBlock).toContain("display: none;");
+    expect(contentRowWithPanelBlock).toContain("grid-template-columns: minmax(0, 1fr);");
+    expect(contentRowWithPanelBlock).not.toContain("var(--agent-right-panel-width)");
   });
 
   it("keeps right panel resizing anchored to the right panel instead of the main track", () => {

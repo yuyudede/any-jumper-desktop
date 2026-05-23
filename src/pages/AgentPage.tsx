@@ -1382,40 +1382,41 @@ export default function AgentPage({
           {activeWorkspace || onToggleTheme ? (
             <div className="agent-sidebar-foot">
               {activeWorkspace ? (
-                <div className="agent-sidebar-foot-main">
-                  <span><MapPin size={14} /> Current Path</span>
+                <>
+                  <div className="agent-sidebar-foot-label">
+                    <MapPin size={14} />
+                    <span>Current Path</span>
+                  </div>
                   <div className="agent-sidebar-foot-path">
                     <code title={activeWorkspace.rootPath}>{activeWorkspace.rootPath}</code>
                   </div>
-                </div>
+                </>
               ) : null}
-              <div className="agent-sidebar-foot-actions">
-                {onToggleTheme ? (
-                  <button
-                    className="agent-sidebar-theme-toggle"
-                    type="button"
-                    aria-label={`切换到${themeMode === "dark" ? "浅色" : "深色"}主题`}
-                    aria-pressed={themeMode === "dark"}
-                    onClick={onToggleTheme}
-                  >
-                    {themeMode === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-                  </button>
-                ) : null}
-                {activeWorkspace ? (
-                  <button
-                    type="button"
-                    className="agent-sidebar-foot-copy"
-                    aria-label={copiedPath ? "已复制" : "复制路径"}
-                    onClick={() => {
-                      void navigator.clipboard.writeText(activeWorkspace.rootPath);
-                      setCopiedPath(true);
-                      window.setTimeout(() => setCopiedPath(false), 1500);
-                    }}
-                  >
-                    {copiedPath ? <Check size={12} /> : <Copy size={12} />}
-                  </button>
-                ) : null}
-              </div>
+              {onToggleTheme ? (
+                <button
+                  className="agent-sidebar-theme-toggle"
+                  type="button"
+                  aria-label={`切换到${themeMode === "dark" ? "浅色" : "深色"}主题`}
+                  aria-pressed={themeMode === "dark"}
+                  onClick={onToggleTheme}
+                >
+                  {themeMode === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+                </button>
+              ) : null}
+              {activeWorkspace ? (
+                <button
+                  type="button"
+                  className="agent-sidebar-foot-copy"
+                  aria-label={copiedPath ? "已复制" : "复制路径"}
+                  onClick={() => {
+                    void navigator.clipboard.writeText(activeWorkspace.rootPath);
+                    setCopiedPath(true);
+                    window.setTimeout(() => setCopiedPath(false), 1500);
+                  }}
+                >
+                  {copiedPath ? <Check size={12} /> : <Copy size={12} />}
+                </button>
+              ) : null}
             </div>
           ) : null}
 

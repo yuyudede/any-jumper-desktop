@@ -28,4 +28,12 @@ describe("MarkdownRenderer mermaid theme", () => {
     expect(css).toContain("stroke: var(--mermaid-edge, #848d97) !important;");
     expect(css).toContain("fill: var(--mermaid-edge, #848d97) !important;");
   });
+
+  it("uses a native non-passive wheel listener for Mermaid zoom instead of React onWheel", () => {
+    const source = readProjectFile("src/components/MarkdownRenderer.tsx");
+
+    expect(source).toContain('addEventListener("wheel", handleWheel, { passive: false })');
+    expect(source).toContain('removeEventListener("wheel", handleWheel)');
+    expect(source).not.toContain("onWheel={handleWheel}");
+  });
 });

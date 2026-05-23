@@ -410,6 +410,7 @@ function MermaidBlock({ code }: { code: string }) {
   const isPanning = useRef(false);
   const panStart = useRef({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<HTMLDivElement>(null);
 
   // Theme change: re-render
   const [themeVersion, setThemeVersion] = useState(0);
@@ -478,6 +479,13 @@ function MermaidBlock({ code }: { code: string }) {
     setZoom((z) => Math.min(3, Math.max(0.25, z - e.deltaY * 0.001)));
   }, []);
 
+  useEffect(() => {
+    const node = svgRef.current;
+    if (!node) return;
+    node.addEventListener("wheel", handleWheel, { passive: false });
+    return () => node.removeEventListener("wheel", handleWheel);
+  }, [error, handleWheel]);
+
   // Pan with mouse drag
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;
@@ -540,9 +548,9 @@ function MermaidBlock({ code }: { code: string }) {
               {code}
             </pre>
             <div
+              ref={svgRef}
               className="mermaid-block-svg"
               style={{ opacity: svgVisible ? 1 : 0 }}
-              onWheel={handleWheel}
               onMouseDown={handleMouseDown}
             >
               <div

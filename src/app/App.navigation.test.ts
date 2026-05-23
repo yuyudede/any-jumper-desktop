@@ -162,13 +162,17 @@ describe("App navigation shell", () => {
     expect(source).toContain('className="agent-sidebar-foot"');
     expect(source).toContain("Current Path");
     expect(source).toContain("MapPin");
-    expect(source).toContain("<MapPin size={14} /> Current Path");
+    expect(source).toContain('className="agent-sidebar-foot-label"');
+    expect(source).toContain("<MapPin size={14} />");
     expect(source).not.toContain("<Info size={14} /> Current Path");
     expect(source).toContain("title={activeWorkspace.rootPath}");
     expect(source).toContain("navigator.clipboard.writeText(activeWorkspace.rootPath)");
     expect(source).toContain('aria-label={copiedPath ? "已复制" : "复制路径"}');
     expect(css).toContain(".agent-sidebar-foot");
     expect(css).toContain("margin-top: auto;");
+    expect(css).toContain("grid-template-columns: minmax(0, 1fr) 24px;");
+    expect(css).toContain("grid-template-rows: 24px 24px;");
+    expect(css).toContain(".agent-sidebar-foot-label");
     expect(css).toContain(".agent-sidebar-foot-copy");
   });
 
@@ -279,6 +283,21 @@ describe("App navigation shell", () => {
     expect(pluginIndex).toBeGreaterThan(modelIndex);
     expect(projectIndex).toBeGreaterThan(pluginIndex);
     expect(source).toContain('activeMainView === "plugin"');
+  });
+
+  it("uses neutral glass for selected primary sidebar entries", () => {
+    const css = readProjectFile("src/styles/theme.css");
+    const activeBlocks = Array.from(css.matchAll(/(?:^|\n)\.(?:agent-bridge-entry|agent-mini-rail-entry)\.is-active\s*\{(?<body>[^}]*)\}/g))
+      .map((match) => match.groups?.body ?? "");
+
+    expect(activeBlocks.length).toBeGreaterThan(0);
+    for (const block of activeBlocks) {
+      expect(block).toContain("background: var(--agent-sidebar-selected-bg);");
+      expect(block).toContain("border-color: var(--agent-sidebar-selected-border);");
+      expect(block).toContain("backdrop-filter: blur(18px) saturate(140%);");
+      expect(block).not.toContain("var(--accent-warm)");
+      expect(block).not.toContain("var(--accent)");
+    }
   });
 
   it("removes the inspector rail from all agent views", () => {
