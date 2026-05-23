@@ -1,0 +1,27 @@
+node_modules/
+dist/
+dist-electron/
+src-tauri/target/
+src-tauri/gen/
+.DS_Store
+*.log
+*.local
+.superpowers/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# AI tool config
+.claude/
+
+# Build outputs / release artifacts
+release/
+package/
+large_tool_results/
+Users/
+
+# Sensitive files
+auth.json

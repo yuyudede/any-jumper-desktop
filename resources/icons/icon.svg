@@ -1,0 +1,71 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="tile" x1="143" y1="52" x2="899" y2="970" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#262836"/>
+      <stop offset="0.54" stop-color="#181B27"/>
+      <stop offset="1" stop-color="#10121A"/>
+    </linearGradient>
+    <radialGradient id="tileGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(340 306) rotate(48) scale(605 650)">
+      <stop stop-color="#293447" stop-opacity="0.8"/>
+      <stop offset="0.62" stop-color="#1C202C" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#101219" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="mark" x1="191" y1="765" x2="865" y2="247" gradientUnits="userSpaceOnUse">
+      <stop offset="0.03" stop-color="#1464A8"/>
+      <stop offset="0.27" stop-color="#17D2DF"/>
+      <stop offset="0.48" stop-color="#22C9F5"/>
+      <stop offset="0.69" stop-color="#694EFF"/>
+      <stop offset="0.86" stop-color="#9363F0"/>
+      <stop offset="1" stop-color="#FF7B66"/>
+    </linearGradient>
+    <linearGradient id="innerMark" x1="553" y1="646" x2="786" y2="509" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5433D7"/>
+      <stop offset="0.52" stop-color="#6547F4"/>
+      <stop offset="1" stop-color="#182BB4"/>
+    </linearGradient>
+    <linearGradient id="innerShade" x1="669" y1="487" x2="699" y2="733" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#081023" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#060817" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="warmTip" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(825 705) rotate(139) scale(158 198)">
+      <stop stop-color="#FF8363"/>
+      <stop offset="0.45" stop-color="#FF6A76" stop-opacity="0.65"/>
+      <stop offset="1" stop-color="#FF6A76" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softShadow" x="68" y="61" width="884" height="809" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="28" stdDeviation="34" flood-color="#05070D" flood-opacity="0.42"/>
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#0A0C14" flood-opacity="0.28"/>
+    </filter>
+    <filter id="innerShadow" x="506" y="431" width="370" height="391" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="-12" dy="14" stdDeviation="18" flood-color="#080A18" flood-opacity="0.35"/>
+    </filter>
+    <clipPath id="roundTile">
+      <rect width="1024" height="1024" rx="178"/>
+    </clipPath>
+    <clipPath id="markClip">
+      <path d="M128 752C166 652 198 558 230 471C269 365 314 273 379 207C459 126 573 98 676 153C778 208 861 326 902 476C932 586 922 698 872 763C832 815 769 827 715 801C673 781 643 741 626 686C606 621 586 554 558 493C532 438 502 391 465 359C438 336 413 334 388 360C351 398 318 479 286 557C256 632 226 708 196 752H128Z"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#roundTile)">
+    <rect width="1024" height="1024" rx="178" fill="url(#tile)"/>
+    <rect width="1024" height="1024" rx="178" fill="url(#tileGlow)"/>
+    <path d="M0 846C172 912 329 941 512 941C697 941 854 912 1024 846V1024H0V846Z" fill="#080A10" opacity="0.42"/>
+    <path d="M18 980C183 1016 335 1034 512 1034C689 1034 842 1016 1006 980" stroke="#303340" stroke-opacity="0.28" stroke-width="5"/>
+  </g>
+
+  <g filter="url(#softShadow)">
+    <path d="M128 752C166 652 198 558 230 471C269 365 314 273 379 207C459 126 573 98 676 153C778 208 861 326 902 476C932 586 922 698 872 763C832 815 769 827 715 801C673 781 643 741 626 686C606 621 586 554 558 493C532 438 502 391 465 359C438 336 413 334 388 360C351 398 318 479 286 557C256 632 226 708 196 752H128Z" fill="url(#mark)"/>
+    <g clip-path="url(#markClip)">
+      <ellipse cx="812" cy="708" rx="185" ry="218" fill="url(#warmTip)"/>
+    </g>
+  </g>
+
+  <path d="M430 377C461 344 501 359 535 413C576 479 606 570 628 657C588 661 552 676 516 698C472 725 431 738 382 738H303C327 686 350 624 372 558C397 483 412 420 430 377Z" fill="#171A25"/>
+  <path d="M430 377C461 344 501 359 535 413C576 479 606 570 628 657C588 661 552 676 516 698C472 725 431 738 382 738H303C327 686 350 624 372 558C397 483 412 420 430 377Z" fill="url(#tileGlow)" opacity="0.55"/>
+
+  <g filter="url(#innerShadow)">
+    <path d="M602 552C643 494 724 482 762 526C805 576 775 674 706 735C674 763 635 744 600 692C566 640 567 601 602 552Z" fill="url(#innerMark)"/>
+    <path d="M647 496C694 485 735 493 762 526C803 577 774 675 706 735C685 753 662 752 640 733C699 653 704 567 647 496Z" fill="url(#innerShade)"/>
+  </g>
+</svg>
