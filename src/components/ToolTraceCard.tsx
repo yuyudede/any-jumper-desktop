@@ -1,6 +1,7 @@
 import { ChevronDown, TerminalSquare } from "lucide-react";
 import { useState } from "react";
 import type { ToolTraceCardModel } from "../utils/toolTrace";
+import { getToolResultRenderer } from "./tool-results";
 
 export function ToolTraceGroup({ cards }: { cards: ToolTraceCardModel[] }) {
   if (cards.length === 0) return null;
@@ -54,7 +55,7 @@ function ToolTraceCard({ card }: { card: ToolTraceCardModel }) {
             </ul>
           ) : null}
           {card.outputPreview ? (
-            <pre className="tool-trace-output">{card.outputPreview}</pre>
+            <ToolResultOutput card={card} />
           ) : null}
         </div>
       ) : null}
@@ -80,4 +81,14 @@ function statusLabel(status: ToolTraceCardModel["status"]) {
   if (status === "rejected") return "已拒绝";
   if (status === "pending") return "等待中";
   return "成功";
+}
+
+function ToolResultOutput({ card }: { card: ToolTraceCardModel }) {
+  const Renderer = getToolResultRenderer(card.name);
+
+  if (Renderer) {
+    return <Renderer card={card} />;
+  }
+
+  return <pre className="tool-trace-output">{card.outputPreview}</pre>;
 }

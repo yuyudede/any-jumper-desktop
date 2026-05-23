@@ -1,7 +1,9 @@
 import mermaid from "mermaid";
 import {
+  Fragment,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useCallback,
   memo,
@@ -9,8 +11,11 @@ import {
 } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { codeToHtml } from "shiki";
+import { codeToTokens } from "shiki";
+import type { BundledLanguage } from "shiki";
+import type { ThemedToken } from "shiki";
 import { Copy, Check } from "lucide-react";
+import { FilePathChip, detectFilePath } from "./message/FilePathChip";
 
 /* ------------------------------------------------------------------ */
 /*  Mermaid init                                                       */
@@ -213,41 +218,37 @@ interface MarkdownRendererProps {
 /*  Shiki code block                                                   */
 /* ------------------------------------------------------------------ */
 
-function useShikiHtml(code: string, lang: string | undefined) {
-  const [html, setHtml] = useState<string>("");
+function useShikiTokens(code: string, lang: string | undefined, streaming: boolean) {
+  const [tokens, setTokens] = useState<ThemedToken[][]>([]);
   const [loading, setLoading] = useState(true);
+  const lastUpdateRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
 
+    // 80ms throttle during streaming to avoid excessive re-computation
+    const now = Date.now();
+    if (streaming && now - lastUpdateRef.current < 80) {
+      setLoading(false);
+      return;
+    }
+
     async function run() {
       const isDark = isDarkMode();
       try {
-        const result = await codeToHtml(code, {
-          lang: lang || "text",
+        const result = await codeToTokens(code, {
+          lang: (lang || "text") as BundledLanguage,
           theme: isDark ? "github-dark" : "github-light",
-          transformers: [
-            {
-              code(node) {
-                node.properties["data-line-numbers"] = "";
-              },
-              line(node, line) {
-                node.properties["data-line"] = String(line);
-              },
-            },
-          ],
         });
         if (!cancelled) {
-          setHtml(result);
+          setTokens(result.tokens);
           setLoading(false);
+          lastUpdateRef.current = Date.now();
         }
       } catch {
-        // fallback to plain text
         if (!cancelled) {
-          setHtml(
-            `<pre style="margin:0"><code>${escapeHtml(code)}</code></pre>`,
-          );
+          setTokens([]);
           setLoading(false);
         }
       }
@@ -267,9 +268,9 @@ function useShikiHtml(code: string, lang: string | undefined) {
       window.removeEventListener("any-jumper-theme-change", onThemeChange);
       media?.removeEventListener("change", onThemeChange);
     };
-  }, [code, lang]);
+  }, [code, lang, streaming]);
 
-  return { html, loading };
+  return { tokens, loading };
 }
 
 function escapeHtml(str: string) {
@@ -289,17 +290,62 @@ function extractMeta(className?: string) {
   return { lang: lang || undefined, filename: filename || undefined };
 }
 
+function fontStyleToString(style: unknown): string | undefined {
+  if (style === undefined || style === null) return undefined;
+  const s = style as number;
+  const parts: string[] = [];
+  // Shiki fontStyle bitmask: 1=italic, 2=bold, 4=underline
+  if (s & 1) parts.push("italic");
+  if (s & 2) parts.push("bold");
+  if (s & 4) parts.push("underline");
+  return parts.length > 0 ? parts.join(" ") : undefined;
+}
+
+const CodeLine = memo(function CodeLine({
+  tokens,
+  rawLine,
+}: {
+  tokens: ThemedToken[];
+  rawLine: string;
+}) {
+  let tokenLength = 0;
+  return (
+    <span className="line">
+      {tokens.map((token, i) => {
+        tokenLength += token.content.length;
+        return (
+          <span
+            key={i}
+            style={{
+              color: token.color,
+              fontStyle: fontStyleToString(token.fontStyle),
+            }}
+          >
+            {token.content}
+          </span>
+        );
+      })}
+      {tokenLength < rawLine.length && (
+        <span>{rawLine.slice(tokenLength)}</span>
+      )}
+    </span>
+  );
+});
+
 function CodeBlock({
   code,
   lang,
   filename,
+  streaming = false,
 }: {
   code: string;
   lang?: string;
   filename?: string;
+  streaming?: boolean;
 }) {
-  const { html, loading } = useShikiHtml(code, lang);
+  const { tokens, loading } = useShikiTokens(code, lang, streaming);
   const [copied, setCopied] = useState(false);
+  const rawLines = useMemo(() => code.split("\n"), [code]);
 
   const handleCopy = useCallback(() => {
     void navigator.clipboard.writeText(code).then(() => {
@@ -333,10 +379,16 @@ function CodeBlock({
           <span>{copied ? "已复制" : "复制"}</span>
         </button>
       </div>
-      <div
-        className={`shiki-body${loading ? " is-loading" : ""}`}
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
+      <pre className={`shiki-body${loading ? " is-loading" : ""}`}>
+        <code>
+          {rawLines.map((rawLine, i) => (
+            <Fragment key={i}>
+              {i > 0 && "\n"}
+              <CodeLine tokens={tokens[i] ?? []} rawLine={rawLine} />
+            </Fragment>
+          ))}
+        </code>
+      </pre>
     </div>
   );
 }
@@ -348,15 +400,23 @@ function CodeBlock({
 function MermaidBlock({ code }: { code: string }) {
   const [svg, setSvg] = useState("");
   const [error, setError] = useState("");
+  const [svgVisible, setSvgVisible] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [themeVersion, setThemeVersion] = useState(0);
-  const id = useMemo(
-    () => `mermaid-${themeVersion}-${Math.random().toString(36).slice(2)}`,
-    [code, themeVersion],
-  );
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const generationRef = useRef(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const isPanning = useRef(false);
+  const panStart = useRef({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
 
+  // Theme change: re-render
+  const [themeVersion, setThemeVersion] = useState(0);
   useEffect(() => {
-    const onThemeChange = () => setThemeVersion((current) => current + 1);
+    const onThemeChange = () => {
+      reinitMermaidTheme();
+      setThemeVersion((c) => c + 1);
+    };
     window.addEventListener("any-jumper-theme-change", onThemeChange);
     const media = window.matchMedia?.("(prefers-color-scheme: dark)");
     media?.addEventListener("change", onThemeChange);
@@ -366,26 +426,39 @@ function MermaidBlock({ code }: { code: string }) {
     };
   }, []);
 
+  // 350ms debounced render with generation race protection
   useEffect(() => {
-    let cancelled = false;
-    mermaid
-      .render(id, code)
-      .then((result) => {
-        if (!cancelled) {
-          setSvg(result.svg);
-          setError("");
-        }
-      })
-      .catch((reason) => {
-        if (!cancelled) {
-          setError(String(reason));
-          setSvg("");
-        }
-      });
+    const gen = ++generationRef.current;
+    setSvgVisible(false);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(() => {
+      const id = `mermaid-${gen}`;
+      mermaid
+        .render(id, code)
+        .then((result) => {
+          if (generationRef.current === gen) {
+            setSvg(result.svg);
+            setError("");
+            setSvgVisible(true);
+            setZoom(1);
+            setPan({ x: 0, y: 0 });
+          }
+        })
+        .catch((reason) => {
+          if (generationRef.current === gen) {
+            setError(String(reason));
+            setSvg("");
+            setSvgVisible(false);
+          }
+        });
+    }, 350);
+
     return () => {
-      cancelled = true;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [code, id]);
+  }, [code, themeVersion]);
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(code).then(() => {
@@ -394,18 +467,57 @@ function MermaidBlock({ code }: { code: string }) {
     });
   }, [code]);
 
-  if (error) {
-    return (
-      <pre className="code-block" style={{ color: "var(--danger)" }}>
-        {code}
-      </pre>
-    );
-  }
+  // Zoom with scroll wheel (only when Ctrl/Cmd is held)
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    setZoom((z) => Math.min(3, Math.max(0.25, z - e.deltaY * 0.001)));
+  }, []);
+
+  // Pan with mouse drag
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    isPanning.current = true;
+    panStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "grabbing";
+  }, [pan.x, pan.y]);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isPanning.current) return;
+      setPan({ x: e.clientX - panStart.current.x, y: e.clientY - panStart.current.y });
+    };
+    const onMouseUp = () => {
+      isPanning.current = false;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
+
+  const resetZoom = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, []);
+
+  const zoomPercent = Math.round(zoom * 100);
 
   return (
     <div className="mermaid-block">
       <div className="mermaid-block-toolbar">
         <span className="mermaid-block-label">Diagram</span>
+        <div className="mermaid-block-zoom">
+          <button onClick={() => setZoom((z) => Math.max(0.25, z - 0.25))} title="缩小">−</button>
+          <span className="mermaid-block-zoom-value" onClick={resetZoom}>{zoomPercent}%</span>
+          <button onClick={() => setZoom((z) => Math.min(3, z + 0.25))} title="放大">+</button>
+          <button onClick={resetZoom} title="重置">↺</button>
+        </div>
         <button
           className="mermaid-block-copy"
           onClick={handleCopy}
@@ -415,10 +527,31 @@ function MermaidBlock({ code }: { code: string }) {
           {copied ? "已复制" : "源码"}
         </button>
       </div>
-      <div
-        className="mermaid-block-svg"
-        dangerouslySetInnerHTML={{ __html: svg || "" }}
-      />
+      <div className="mermaid-block-stage" ref={containerRef}>
+        {error ? (
+          <pre className="mermaid-block-source is-error">{code}</pre>
+        ) : (
+          <>
+            <pre className="mermaid-block-source" style={{ opacity: svgVisible ? 0 : 1 }}>
+              {code}
+            </pre>
+            <div
+              className="mermaid-block-svg"
+              style={{ opacity: svgVisible ? 1 : 0 }}
+              onWheel={handleWheel}
+              onMouseDown={handleMouseDown}
+            >
+              <div
+                style={{
+                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                  transformOrigin: "center center",
+                }}
+                dangerouslySetInnerHTML={{ __html: svg }}
+              />
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -523,11 +656,17 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, stream
             },
             code(props) {
               const { className, children } = props;
+              const codeText = String(children).replace(/\n$/, "");
+              const { lang, filename } = extractMeta(className);
               const match = /language-(\w+)/.exec(className || "");
               if (match) {
                 return (
-                  <CodeBlock code={String(children).replace(/\n$/, "")} lang={match[1]} />
+                  <CodeBlock code={codeText} lang={lang} filename={filename} streaming />
                 );
+              }
+              const filePath = detectFilePath(codeText);
+              if (filePath) {
+                return <FilePathChip filePath={filePath} />;
               }
               return <code className="md-inline-code">{children}</code>;
             },
@@ -633,10 +772,14 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, stream
               node?.type === "element" &&
               node?.tagName !== "pre";
             if (isInline) {
+              const filePath = detectFilePath(codeText);
+              if (filePath) {
+                return <FilePathChip filePath={filePath} />;
+              }
               return <code className="md-inline-code">{children}</code>;
             }
 
-            return <CodeBlock code={codeText} lang={lang} filename={filename} />;
+            return <CodeBlock code={codeText} lang={lang} filename={filename} streaming={false} />;
           },
         }}
       >

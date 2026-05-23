@@ -208,6 +208,15 @@ export const desktopApi = {
   agentBridgeRpc(method: string, params?: Record<string, unknown>) {
     return invoke<AgentBridgeRpcResponse>("agent_bridge_rpc", { request: { method, params } });
   },
+  listDirectory(dirPath: string) {
+    return invoke<{ path: string; name: string; type: "file" | "directory"; hasChildren?: boolean }[]>("list_directory", { dirPath });
+  },
+  readFileContent(filePath: string) {
+    return invoke<string>("read_file_content", { filePath });
+  },
+  getFileInfo(filePath: string) {
+    return invoke<{ path: string; name: string; type: string; size: number; modifiedAt: number }>("get_file_info", { filePath });
+  },
   terminalCreate(cwd?: string) {
     return invoke<string>("terminal_create", { cwd });
   },

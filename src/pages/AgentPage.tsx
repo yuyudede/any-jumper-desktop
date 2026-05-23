@@ -6,6 +6,7 @@ import {
   FilePlus2,
   Folder,
   FolderOpen,
+  FolderTree,
   GitBranch,
   History,
   Info,
@@ -20,6 +21,8 @@ import {
   Package,
   PauseCircle,
   Pencil,
+  Pin,
+  PinOff,
   Plus,
   Radio,
   RefreshCw,
@@ -33,6 +36,7 @@ import {
   TerminalSquare,
   Trash2,
   Wrench,
+  Archive,
 } from "lucide-react";
 import {
   forwardRef,
@@ -66,6 +70,7 @@ import {
 import { EmptyState } from "../components/ui/empty-state";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
+import RichComposer, { type RichComposerHandle } from "../components/RichComposer";
 import { Textarea } from "../components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
 import {
@@ -76,6 +81,11 @@ import {
   type SlashCommand,
 } from "../lib/slash-commands";
 import { MarkdownRenderer } from "../components/MarkdownRenderer";
+import { Message, MessageBody, MessageActions, MessageImageGrid } from "../components/message";
+import { Conversation, ConversationScrollButton } from "../components/conversation";
+import { ResizeHandle } from "../components/ResizeHandle";
+import { WorkspaceFileTree } from "../components/WorkspaceFileTree";
+import { PreviewPanel, type PreviewFile } from "../components/PreviewPanel";
 import ModelPage from "./ModelPage";
 import PluginPage from "./PluginPage";
 import { ProjectPicker } from "../components/ProjectPicker";
@@ -195,6 +205,48 @@ export default function AgentPage({
   const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
   const [activeMainView, setActiveMainView] = useState<ActiveMainView>("chat");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(284);
+  const [pinnedThreadIds, setPinnedThreadIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem("any-jumper-pinned-threads");
+      return stored ? new Set<string>(JSON.parse(stored)) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  });
+  const [showArchivedThreads, setShowArchivedThreads] = useState(false);
+
+  const handleSidebarResize = useCallback((delta: number) => {
+    setSidebarWidth((prev) => Math.min(480, Math.max(180, prev + delta)));
+  }, []);
+
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
+  const [previewSplitRatio, setPreviewSplitRatio] = useState(0.45);
+
+  const handleFileOpen = useCallback(async (filePath: string) => {
+    try {
+      const content = await desktopApi.readFileContent(filePath);
+      setPreviewFile({ path: filePath, content });
+      setPreviewOpen(true);
+    } catch {
+      showNotice({ tone: "danger", title: "无法读取文件", detail: filePath });
+    }
+  }, []);
+
+  const handlePreviewClose = useCallback(() => {
+    setPreviewOpen(false);
+    setPreviewFile(null);
+  }, []);
+
+  const handlePreviewResize = useCallback((delta: number) => {
+    setPreviewSplitRatio((prev) => {
+      const containerWidth = window.innerWidth - sidebarWidth - 6;
+      const currentPx = prev * containerWidth;
+      const newPx = currentPx - delta;
+      return Math.min(0.75, Math.max(0.25, newPx / containerWidth));
+    });
+  }, [sidebarWidth]);
 
   const [terminalVisible, setTerminalVisible] = useState(false);
   const [bridgeStatus, setBridgeStatus] = useState<AgentBridgeStatus>();
@@ -210,9 +262,6 @@ export default function AgentPage({
   const initialSelectionRef = useRef(readInitialAgentSelection());
   const creatingThreadForWorkspaceRef = useRef(new Set<string>());
   const composerRef = useRef<AgentComposerHandle>(null);
-  const transcriptRef = useRef<HTMLDivElement>(null);
-  const [transcriptPinnedToBottom, setTranscriptPinnedToBottom] = useState(true);
-  const [showTranscriptJump, setShowTranscriptJump] = useState(false);
 
   const activeWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
   const activeWorkspaceThreads = workspaceId ? threadsByWorkspaceId[workspaceId] || [] : [];
@@ -265,82 +314,6 @@ export default function AgentPage({
     () => (detail?.approvals || []).filter((approval) => !approval.decision),
     [detail?.approvals],
   );
-  const transcriptScrollSignature = useMemo(() => [
-    threadId || "",
-    visibleItems.map((item) => [
-      item.id,
-      item.role,
-      item.status,
-      item.turnId || "",
-      item.content.length,
-      item.images?.length || 0,
-    ].join(":")).join("|"),
-    Object.values(thinkingTraceByTurn).map((section) => [
-      section.turnId,
-      section.status,
-      section.summary,
-      section.items.map((item) => [
-        item.id,
-        item.status,
-        item.title.length,
-        item.detail?.length || 0,
-      ].join(":")).join(","),
-    ].join(":")).join("|"),
-    Object.values(toolTraceByTurn).map((cardsById) =>
-      Object.values(cardsById).map((card) => [
-        card.id,
-        card.status,
-        card.title.length,
-        card.inputSummary?.length || 0,
-        card.outputPreview.length,
-        card.progress.length,
-      ].join(":")).join(","),
-    ).join("|"),
-    detail?.progressNotes.length || 0,
-    detail?.toolCalls.length || 0,
-    detail?.toolCallEvents.length || 0,
-    pendingApprovals.length,
-    Object.entries(expandedTraceTurns)
-      .filter(([, isExpanded]) => isExpanded)
-      .map(([turnId]) => turnId)
-      .join("|"),
-  ].join("::"), [
-    detail?.progressNotes.length,
-    detail?.toolCallEvents.length,
-    detail?.toolCalls.length,
-    expandedTraceTurns,
-    pendingApprovals.length,
-    thinkingTraceByTurn,
-    threadId,
-    toolTraceByTurn,
-    visibleItems,
-  ]);
-
-  const handleTranscriptScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
-    const pinned = isNearScrollBottom(event.currentTarget);
-    setTranscriptPinnedToBottom(pinned);
-    setShowTranscriptJump(!pinned && event.currentTarget.scrollHeight > event.currentTarget.clientHeight);
-  }, []);
-
-  const jumpTranscriptToLatest = useCallback(() => {
-    setTranscriptPinnedToBottom(true);
-    setShowTranscriptJump(false);
-    scrollElementToBottom(transcriptRef.current, "smooth");
-  }, []);
-
-  useLayoutEffect(() => {
-    const element = transcriptRef.current;
-    if (!element || activeMainView !== "chat") return;
-
-    if (transcriptPinnedToBottom) {
-      scrollElementToBottom(element);
-      setShowTranscriptJump(false);
-      return;
-    }
-
-    setShowTranscriptJump(element.scrollHeight > element.clientHeight && !isNearScrollBottom(element));
-  }, [activeMainView, transcriptPinnedToBottom, transcriptScrollSignature]);
-
   useEffect(() => {
     void bootstrap();
     return () => {
@@ -403,8 +376,6 @@ export default function AgentPage({
     setTokenUsageByTurn({});
     setToolTraceByTurn({});
     setExpandedTraceTurns({});
-    setTranscriptPinnedToBottom(true);
-    setShowTranscriptJump(false);
     if (threadId) void loadThread(threadId);
   }, [threadId]);
 
@@ -770,6 +741,37 @@ export default function AgentPage({
     }
   }
 
+  function togglePinThread(threadId: string) {
+    setPinnedThreadIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(threadId)) {
+        next.delete(threadId);
+      } else {
+        next.add(threadId);
+      }
+      localStorage.setItem("any-jumper-pinned-threads", JSON.stringify([...next]));
+      return next;
+    });
+  }
+
+  async function archiveThread(thread: AgentThread) {
+    try {
+      await desktopApi.threadArchive(thread.id);
+      const remaining = (threadsByWorkspaceId[thread.workspaceId] || []).filter((item) => item.id !== thread.id);
+      setThreadsByWorkspaceId((current) => ({ ...current, [thread.workspaceId]: remaining }));
+      pushActivity("归档会话", "success", thread.title);
+      if (thread.id === threadId) {
+        const next = remaining[0];
+        setDetail(undefined);
+        if (next) {
+          setThreadId(next.id);
+        }
+      }
+    } catch {
+      pushActivity("归档失败", "error", thread.title);
+    }
+  }
+
   function removeThread(thread: AgentThread) {
     setConfirmAction({
       title: `删除「${thread.title}」？`,
@@ -865,8 +867,6 @@ export default function AgentPage({
   async function sendMessageToAgent(input: string, images: ImageAttachment[]): Promise<boolean> {
     if (!threadId || (!input.trim() && images.length === 0)) return false;
     const targetThreadId = threadId;
-    setTranscriptPinnedToBottom(true);
-    setShowTranscriptJump(false);
     pushActivity(activeThread?.status === "running" ? "排队发送" : "发送会话", "running", input);
     try {
       await autoNameThreadIfNeeded(targetThreadId, input);
@@ -936,8 +936,6 @@ export default function AgentPage({
       showNotice({ tone: "warning", title: "重试内容不能为空" });
       return;
     }
-    setTranscriptPinnedToBottom(true);
-    setShowTranscriptJump(false);
     try {
       const next = await desktopApi.turnEditAndRerun(editingItem.id, content, {
         runtimeId: DEEPAGENTS_RUNTIME_ID,
@@ -1048,6 +1046,7 @@ export default function AgentPage({
     <TooltipProvider delayDuration={160}>
       <div
         className={`agent-workbench shadcn-agent-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""}`}
+        style={{ "--agent-sidebar-width": `${sidebarCollapsed ? 60 : sidebarWidth}px` } as React.CSSProperties}
         data-ui="shadcn-agent-shell"
       >
         {notice ? (
@@ -1058,6 +1057,43 @@ export default function AgentPage({
         ) : null}
 
         <aside className="agent-sidebar">
+          {/* Mini Rail — icon-only collapsed mode */}
+          <div className="agent-mini-rail">
+            <button
+              className={`agent-mini-rail-entry ${activeMainView === "bridge" ? "is-active" : ""}`}
+              type="button"
+              aria-label="Agent-Bridge"
+              onClick={openAgentBridge}
+            >
+              <Radio size={17} />
+            </button>
+            <button
+              className={`agent-mini-rail-entry ${activeMainView === "modelConfig" ? "is-active" : ""}`}
+              type="button"
+              aria-label="Model-Config"
+              onClick={() => setActiveMainView("modelConfig")}
+            >
+              <KeyRound size={17} />
+            </button>
+            <button
+              className={`agent-mini-rail-entry ${activeMainView === "plugin" ? "is-active" : ""}`}
+              type="button"
+              aria-label="Plugin"
+              onClick={() => setActiveMainView("plugin")}
+            >
+              <Package size={17} />
+            </button>
+            <div className="agent-mini-rail-separator" />
+            <button
+              className="agent-mini-rail-entry"
+              type="button"
+              aria-label="Project"
+              onClick={toggleProjectTreeCollapsed}
+            >
+              <FolderTree size={17} />
+            </button>
+          </div>
+
           <button
             className={`agent-bridge-entry ${activeMainView === "bridge" ? "is-active" : ""}`}
             type="button"
@@ -1164,11 +1200,19 @@ export default function AgentPage({
                               ) : workspaceThreads.length === 0 ? (
                                 <MiniEmpty label="No sessions" />
                               ) : (
-                                workspaceThreads.map((thread) => {
+                                [...workspaceThreads]
+                                  .sort((a, b) => {
+                                    const aPinned = pinnedThreadIds.has(a.id) ? 1 : 0;
+                                    const bPinned = pinnedThreadIds.has(b.id) ? 1 : 0;
+                                    if (aPinned !== bPinned) return bPinned - aPinned;
+                                    return (b.updatedAt || 0) - (a.updatedAt || 0);
+                                  })
+                                  .map((thread) => {
                                   const isActive = thread.id === threadId;
+                                  const isPinned = pinnedThreadIds.has(thread.id);
                                   return (
                                     <div
-                                      className="codex-session-row is-nested"
+                                      className={`codex-session-row is-nested ${isPinned ? "is-pinned" : ""} ${isActive ? "is-active" : ""}`}
                                       key={thread.id}
                                     >
                                       <button
@@ -1176,18 +1220,37 @@ export default function AgentPage({
                                         type="button"
                                         onClick={() => selectThread(workspace, thread)}
                                       >
-                                        <span className="codex-session-title">{thread.title}</span>
+                                        <span className="codex-session-title">
+                                          {isPinned && <Pin size={11} className="codex-session-pin-icon" />}
+                                          {thread.title}
+                                        </span>
                                         <span className="codex-session-meta">
-                                          {isActive ? <span className="codex-session-dot" /> : formatRelativeTime(thread.updatedAt)}
+                                          {formatRelativeTime(thread.updatedAt)}
                                         </span>
                                       </button>
                                       <button
-                                        aria-label={`删除会话 ${thread.title}`}
+                                        aria-label={isPinned ? `取消置顶 ${thread.title}` : `置顶 ${thread.title}`}
+                                        className={`codex-session-action ${isPinned ? "codex-session-action-active" : ""}`}
+                                        type="button"
+                                        onClick={() => togglePinThread(thread.id)}
+                                      >
+                                        {isPinned ? <PinOff size={12} /> : <Pin size={12} />}
+                                      </button>
+                                      <button
+                                        aria-label={`归档 ${thread.title}`}
                                         className="codex-session-action"
+                                        type="button"
+                                        onClick={() => archiveThread(thread)}
+                                      >
+                                        <Archive size={12} />
+                                      </button>
+                                      <button
+                                        aria-label={`删除会话 ${thread.title}`}
+                                        className="codex-session-action codex-session-action-danger"
                                         type="button"
                                         onClick={() => removeThread(thread)}
                                       >
-                                        <Trash2 size={13} />
+                                        <Trash2 size={12} />
                                       </button>
                                     </div>
                                   );
@@ -1212,26 +1275,36 @@ export default function AgentPage({
           ) : null}
 
           {activeWorkspace && !projectTreeCollapsed ? (
-            <div className="agent-sidebar-foot">
-              <span><Info size={14} /> Current Path</span>
-              <div className="agent-sidebar-foot-path">
-                <code title={activeWorkspace.rootPath}>{activeWorkspace.rootPath}</code>
-                <button
-                  type="button"
-                  className="agent-sidebar-foot-copy"
-                  aria-label={copiedPath ? "已复制" : "复制路径"}
-                  onClick={() => {
-                    void navigator.clipboard.writeText(activeWorkspace.rootPath);
-                    setCopiedPath(true);
-                    window.setTimeout(() => setCopiedPath(false), 1500);
-                  }}
-                >
-                  {copiedPath ? <Check size={12} /> : <Copy size={12} />}
-                </button>
+            <>
+              <WorkspaceFileTree
+                rootPath={activeWorkspace.rootPath}
+                onFileOpen={handleFileOpen}
+              />
+              <div className="agent-sidebar-foot">
+                <span><Info size={14} /> Current Path</span>
+                <div className="agent-sidebar-foot-path">
+                  <code title={activeWorkspace.rootPath}>{activeWorkspace.rootPath}</code>
+                  <button
+                    type="button"
+                    className="agent-sidebar-foot-copy"
+                    aria-label={copiedPath ? "已复制" : "复制路径"}
+                    onClick={() => {
+                      void navigator.clipboard.writeText(activeWorkspace.rootPath);
+                      setCopiedPath(true);
+                      window.setTimeout(() => setCopiedPath(false), 1500);
+                    }}
+                  >
+                    {copiedPath ? <Check size={12} /> : <Copy size={12} />}
+                  </button>
+                </div>
               </div>
-            </div>
+            </>
           ) : null}
         </aside>
+
+        {!sidebarCollapsed && (
+          <ResizeHandle onResize={handleSidebarResize} />
+        )}
 
         <section className="agent-main">
           <header className="agent-status-strip">
@@ -1313,12 +1386,169 @@ export default function AgentPage({
             <div className="model-config-inline">
               <PluginPage pushActivity={pushActivity} />
             </div>
+          ) : previewOpen && previewFile ? (
+            <div className="agent-main-with-preview">
+              <div className="agent-main-chat">
+                <Conversation
+                  className={visibleItems.length === 0 ? "is-empty-home" : ""}
+                >
+                  {visibleItems.length === 0 ? (
+                    <AgentEmptyState
+                      activeWorkspace={activeWorkspace}
+                      threadReady={Boolean(threadId)}
+                      onPickSuggestion={(suggestion) => composerRef.current?.setComposer(suggestion)}
+                      onCreateWorkspace={openCreateWorkspace}
+                    />
+                  ) : (
+                  <>
+                    {visibleItems.map((item) => {
+                      const assistantDisplay = assistantDisplayParts(item);
+                      const displayContent = item.role === "assistant" ? assistantDisplay.content : userDisplayContent(item.content);
+                      const isEmpty = !displayContent.trim();
+                      const messageActionsDisabled = activeThread?.status === "running";
+                      const hasCopyableMessage = displayContent.trim().length > 0;
+                      const showUserActions = item.role === "user" && hasCopyableMessage;
+                      const showAssistantActions = item.role === "assistant" && hasCopyableMessage;
+                      const turnToolCalls = item.turnId ? toolCallsByTurn.get(item.turnId) || [] : [];
+                      const approvalCards = turnApprovalsForToolCalls(pendingApprovals, turnToolCalls);
+                      const progressNotes = item.turnId
+                        ? [...(progressNotesByTurn.get(item.turnId) || []), ...assistantDisplay.progressNotes]
+                        : assistantDisplay.progressNotes;
+                      const thinkingSection = thinkingTraceSectionForTurn({
+                        traceByTurn: thinkingTraceByTurn,
+                        turnId: item.turnId,
+                        turn: item.turnId ? turnsById.get(item.turnId) : undefined,
+                        toolCalls: turnToolCalls,
+                        progressNotes,
+                      });
+                      const toolCards = item.role === "assistant"
+                        ? buildToolTraceCardsForTurn({
+                          traceByTurn: toolTraceByTurn,
+                          turnId: item.turnId,
+                          toolCalls: turnToolCalls,
+                          toolCallEvents: item.turnId ? toolCallEventsByTurn.get(item.turnId) || [] : [],
+                        })
+                        : [];
+                      const showModelProcess =
+                        item.role === "assistant" &&
+                        Boolean(thinkingSection || toolCards.length > 0 || approvalCards.length > 0) &&
+                        (
+                          item.status === "running" ||
+                          thinkingSection?.status === "running" ||
+                          Boolean(thinkingSection?.items.length) ||
+                          toolCards.length > 0 ||
+                          approvalCards.length > 0
+                        );
+                      const modelProcessSection = thinkingSection || toolOnlyTraceSection(item.turnId, toolCards, approvalCards);
+                      const traceExpanded = modelProcessSection
+                        ? expandedTraceTurns[modelProcessSection.turnId] ?? defaultTurnTraceExpanded(modelProcessSection, approvalCards)
+                        : false;
+                      const messageStatus = (item.status as "running" | "completed" | "error" | "idle") || "completed";
+                      return (
+                        <Message key={item.id} id={item.id} role={item.role as "user" | "assistant" | "system"} status={messageStatus} isEmpty={isEmpty}>
+                          {showModelProcess && modelProcessSection ? (
+                            <TurnTracePanel
+                              expanded={traceExpanded}
+                              section={modelProcessSection}
+                              toolCards={toolCards}
+                              approvals={approvalCards}
+                              tokenUsage={item.turnId ? tokenUsageByTurn[item.turnId] : undefined}
+                              onToggle={() => toggleThinkingTrace(modelProcessSection, approvalCards)}
+                              onResolveApproval={resolveApproval}
+                            />
+                          ) : null}
+                          {displayContent.trim() || (item.images && item.images.length > 0) ? (
+                            <MessageBody>
+                              {displayContent.trim() ? (
+                                <MarkdownRenderer content={displayContent} streaming={item.status === "running"} />
+                              ) : null}
+                              {item.images && item.images.length > 0 ? (
+                                <MessageImageGrid images={item.images} />
+                              ) : null}
+                            </MessageBody>
+                          ) : null}
+                          {showUserActions ? (
+                            <MessageActions>
+                              <IconButton
+                                className="message-action-button"
+                                label="复制消息"
+                                onClick={() => void copyMessageContent(item)}
+                              >
+                                <Copy size={13} />
+                              </IconButton>
+                              <IconButton
+                                className="message-action-button"
+                                disabled={messageActionsDisabled}
+                                label="编辑并重试"
+                                onClick={() => openRetryEditor(item)}
+                              >
+                                <Pencil size={13} />
+                              </IconButton>
+                            </MessageActions>
+                          ) : null}
+                          {showAssistantActions ? (
+                            <MessageActions>
+                              <IconButton
+                                className="message-action-button"
+                                label="复制消息"
+                                onClick={() => void copyMessageContent(item)}
+                              >
+                                <Copy size={13} />
+                              </IconButton>
+                              <IconButton
+                                className="message-action-button"
+                                disabled={messageActionsDisabled}
+                                label="从这里分叉"
+                                onClick={() => void forkThreadFromItem(item)}
+                              >
+                                <GitBranch size={13} />
+                              </IconButton>
+                            </MessageActions>
+                          ) : null}
+                        </Message>
+                      );
+                    })}
+                  </>
+                )}
+                <ConversationScrollButton />
+              </Conversation>
+
+              <AgentComposer
+                ref={composerRef}
+                activeModelDisplayName={activeModel?.displayName || "Model"}
+                modelKeyMissing={modelKeyMissing}
+                permissionView={permissionView}
+                queueLength={detail?.queue.length || 0}
+                threadId={threadId}
+                workspaceId={workspaceId}
+                isRunning={activeThread?.status === "running"}
+                skills={skills}
+                onAttachFilesActivity={pushActivity}
+                onInterrupt={interrupt}
+                onModelSettingsOpen={openModelSettings}
+                onPermissionModeChange={setPermissionMode}
+                onSubmit={sendMessage}
+              />
+              <TerminalPanel
+                rootPath={activeWorkspace?.rootPath}
+                workspaceName={activeWorkspace?.name}
+                visible={terminalVisible}
+                onToggle={() => setTerminalVisible(false)}
+              />
+              </div>
+              <ResizeHandle onResize={handlePreviewResize} />
+              <div className="agent-main-preview">
+                <PreviewPanel
+                  file={previewFile}
+                  diff={null}
+                  onClose={handlePreviewClose}
+                />
+              </div>
+            </div>
           ) : (
             <>
-              <div
-                ref={transcriptRef}
-                className={`transcript ${visibleItems.length === 0 ? "is-empty-home" : ""}`}
-                onScroll={handleTranscriptScroll}
+              <Conversation
+                className={visibleItems.length === 0 ? "is-empty-home" : ""}
               >
                 {visibleItems.length === 0 ? (
                   <AgentEmptyState
@@ -1371,16 +1601,9 @@ export default function AgentPage({
                       const traceExpanded = modelProcessSection
                         ? expandedTraceTurns[modelProcessSection.turnId] ?? defaultTurnTraceExpanded(modelProcessSection, approvalCards)
                         : false;
-                      const messageClassName = [
-                        "message",
-                        `message-${messageRoleClass(item.role)}`,
-                        `message-status-${messageStatusClass(item.status)}`,
-                        isEmpty ? "is-empty" : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ");
+                      const messageStatus = (item.status as "running" | "completed" | "error" | "idle") || "completed";
                       return (
-                        <article className={messageClassName} key={item.id}>
+                        <Message key={item.id} id={item.id} role={item.role as "user" | "assistant" | "system"} status={messageStatus} isEmpty={isEmpty}>
                           {showModelProcess && modelProcessSection ? (
                             <TurnTracePanel
                               expanded={traceExpanded}
@@ -1393,26 +1616,17 @@ export default function AgentPage({
                             />
                           ) : null}
                           {displayContent.trim() || (item.images && item.images.length > 0) ? (
-                            <div className="message-body">
+                            <MessageBody>
                               {displayContent.trim() ? (
                                 <MarkdownRenderer content={displayContent} streaming={item.status === "running"} />
                               ) : null}
                               {item.images && item.images.length > 0 ? (
-                                <div className="message-image-grid">
-                                  {item.images.map((image, idx) => (
-                                    <img
-                                      key={idx}
-                                      className="message-image"
-                                      src={`data:${image.mimeType};base64,${image.data}`}
-                                      alt={image.name || `图片 ${idx + 1}`}
-                                    />
-                                  ))}
-                                </div>
+                                <MessageImageGrid images={item.images} />
                               ) : null}
-                            </div>
+                            </MessageBody>
                           ) : null}
                           {showUserActions ? (
-                            <div className="message-actions" aria-label="用户消息操作">
+                            <MessageActions>
                               <IconButton
                                 className="message-action-button"
                                 label="复制消息"
@@ -1428,10 +1642,10 @@ export default function AgentPage({
                               >
                                 <Pencil size={13} />
                               </IconButton>
-                            </div>
+                            </MessageActions>
                           ) : null}
                           {showAssistantActions ? (
-                            <div className="message-actions" aria-label="助手消息操作">
+                            <MessageActions>
                               <IconButton
                                 className="message-action-button"
                                 label="复制消息"
@@ -1447,23 +1661,15 @@ export default function AgentPage({
                               >
                                 <GitBranch size={13} />
                               </IconButton>
-                            </div>
+                            </MessageActions>
                           ) : null}
-                        </article>
+                        </Message>
                       );
                     })}
                   </>
                 )}
-                {showTranscriptJump && visibleItems.length > 0 ? (
-                  <button
-                    className="transcript-jump-to-latest"
-                    type="button"
-                    onClick={jumpTranscriptToLatest}
-                  >
-                    跳到最新
-                  </button>
-                ) : null}
-              </div>
+                <ConversationScrollButton />
+              </Conversation>
 
               <AgentComposer
                 ref={composerRef}
@@ -1720,6 +1926,7 @@ const AgentComposer = memo(forwardRef<AgentComposerHandle, AgentComposerProps>(f
   const [sending, setSending] = useState(false);
   const [interrupting, setInterrupting] = useState(false);
   const slashSuggestionItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const richComposerRef = useRef<RichComposerHandle>(null);
 
   useImperativeHandle(ref, () => ({ setComposer }), []);
 
@@ -1877,13 +2084,22 @@ const AgentComposer = memo(forwardRef<AgentComposerHandle, AgentComposerProps>(f
             })}
           </div>
         ) : null}
-        <Textarea
-          value={composer}
-          rows={2}
+        <RichComposer
+          ref={richComposerRef}
+          content={composer}
           placeholder="输入下一步要求（输入 / 查看命令）"
-          onChange={(event) => {
-            setComposer(event.target.value);
+          onContentChange={(text) => {
+            setComposer(text);
             setSelectedSuggestionIndex(0);
+          }}
+          onEnter={() => {
+            if (showSuggestions) {
+              if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < suggestions.length) {
+                applySuggestion(suggestions[selectedSuggestionIndex].command);
+              }
+              return;
+            }
+            void submitComposer();
           }}
           onKeyDown={(event) => {
             if (showSuggestions) {
@@ -1891,13 +2107,6 @@ const AgentComposer = memo(forwardRef<AgentComposerHandle, AgentComposerProps>(f
                 event.preventDefault();
                 if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < suggestions.length) {
                   completeSuggestion(suggestions[selectedSuggestionIndex].command);
-                }
-                return;
-              }
-              if (event.key === "Enter") {
-                event.preventDefault();
-                if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < suggestions.length) {
-                  applySuggestion(suggestions[selectedSuggestionIndex].command);
                 }
                 return;
               }
@@ -1917,11 +2126,7 @@ const AgentComposer = memo(forwardRef<AgentComposerHandle, AgentComposerProps>(f
                 return;
               }
             }
-            if (event.key !== "Enter" || event.shiftKey) return;
-            event.preventDefault();
-            void submitComposer();
           }}
-          onPaste={handlePaste}
         />
         <div className="composer-actions">
           <div className="composer-left-actions">
@@ -2151,8 +2356,29 @@ function ModelSettingsDialog({
   onModelChange: (value: string) => void;
   onProviderChange: (value: string) => void;
 }) {
+  const [draftProvider, setDraftProvider] = useState(selectedProvider);
+  const [draftModel, setDraftModel] = useState(selectedModel);
+
+  // Reset drafts when dialog opens with new values
+  useEffect(() => {
+    if (open) {
+      setDraftProvider(selectedProvider);
+      setDraftModel(selectedModel);
+    }
+  }, [open, selectedProvider, selectedModel]);
+
+  function handleConfirm() {
+    onProviderChange(draftProvider);
+    onModelChange(draftModel);
+    onClose();
+  }
+
+  function handleCancel() {
+    onClose();
+  }
+
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+    <Dialog open={open} onOpenChange={(next) => !next && handleCancel()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Switch Model</DialogTitle>
@@ -2173,18 +2399,18 @@ function ModelSettingsDialog({
           <label className="field-stack">
             <span>Provider</span>
             <Select
-              value={selectedProvider}
+              value={draftProvider}
               options={providerOptions}
-              onChange={(event) => onProviderChange(event.target.value)}
+              onChange={(event) => setDraftProvider(event.target.value)}
             />
           </label>
           <label className="field-stack">
             <span>Model</span>
             <Select
               className="mono-select"
-              value={selectedModel}
+              value={draftModel}
               options={modelOptions}
-              onChange={(event) => onModelChange(event.target.value)}
+              onChange={(event) => setDraftModel(event.target.value)}
             />
           </label>
           <div className="model-current-row">
@@ -2193,7 +2419,8 @@ function ModelSettingsDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="ghost" onClick={onClose}>Close</Button>
+          <Button type="button" variant="ghost" onClick={handleCancel}>Cancel</Button>
+          <Button type="button" onClick={handleConfirm}>Confirm</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -499,6 +499,7 @@ class StorageService {
     this.ensureColumn("model_configs", "models_json", "TEXT");
     this.ensureColumn("progress_notes", "kind", "TEXT NOT NULL DEFAULT 'progress'");
     this.ensureColumn("items", "images_json", "TEXT");
+    this.ensureColumn("items", "reasoning_content", "TEXT");
   }
 
   private ensureColumn(table: string, column: string, definition: string) {
@@ -768,9 +769,9 @@ class StorageService {
 
   insertItem(item: AgentItem) {
     this.db.prepare(`
-      INSERT INTO items (id, thread_id, turn_id, role, item_type, content, status, tool_call_id, metadata_json, hidden, images_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(item.id, item.threadId, item.turnId ?? null, item.role, item.itemType, item.content, item.status, item.toolCallId ?? null, item.metadata ? JSON.stringify(item.metadata) : null, bool(item.hidden), item.images ? JSON.stringify(item.images) : null, item.createdAt);
+      INSERT INTO items (id, thread_id, turn_id, role, item_type, content, reasoning_content, status, tool_call_id, metadata_json, hidden, images_json, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(item.id, item.threadId, item.turnId ?? null, item.role, item.itemType, item.content, item.reasoningContent ?? null, item.status, item.toolCallId ?? null, item.metadata ? JSON.stringify(item.metadata) : null, bool(item.hidden), item.images ? JSON.stringify(item.images) : null, item.createdAt);
   }
 
   getItem(id: string): AgentItem {
@@ -783,6 +784,11 @@ class StorageService {
 
   updateItemContent(id: string, content: string): AgentItem {
     this.db.prepare("UPDATE items SET content=? WHERE id=?").run(content, id);
+    return this.getItem(id);
+  }
+
+  updateItemReasoningContent(id: string, reasoningContent: string): AgentItem {
+    this.db.prepare("UPDATE items SET reasoning_content=? WHERE id=?").run(reasoningContent, id);
     return this.getItem(id);
   }
 
@@ -1599,7 +1605,11 @@ class AgentRuntimeService {
       if (event?.event === "on_chain_end" && event?.data?.output) storage.saveRuntimeCheckpoint(ctx.thread.id, ctx.turn.id, ctx.runtime.id, event.data.output);
     }
     const reasoningToRecord = exposedReasoning.trim() ? exposedReasoning : finalReasoningCandidate;
-    if (reasoningToRecord.trim()) recordModelReasoning(ctx, reasoningToRecord);
+    if (reasoningToRecord.trim()) {
+      recordModelReasoning(ctx, reasoningToRecord);
+      // Save reasoning_content to the assistant item for DeepSeek thinking mode
+      storage.updateItemReasoningContent(ctx.assistantItemId, reasoningToRecord);
+    }
     const finalFlush = flushTurnOutputSegments(ctx, outputClassifier.finish());
     if (!finalFlush.finalAnswerEmitted && finalCandidate) {
       recordRuntimeProgress(ctx, "模型已经开始返回内容。");
@@ -1701,7 +1711,7 @@ function mapItem(row: any): AgentItem {
   const { metadataJson: _metadataJson, imagesJson: _imagesJson, ...rest } = item;
   void _metadataJson;
   void _imagesJson;
-  return { ...rest, hidden: toBool((row as any).hidden), turnId: item.turnId ?? undefined, toolCallId: item.toolCallId ?? undefined, metadata: jsonParse(item.metadataJson, undefined), images: jsonParse(item.imagesJson, undefined) };
+  return { ...rest, hidden: toBool((row as any).hidden), turnId: item.turnId ?? undefined, toolCallId: item.toolCallId ?? undefined, metadata: jsonParse(item.metadataJson, undefined), images: jsonParse(item.imagesJson, undefined), reasoningContent: item.reasoningContent ?? undefined };
 }
 
 function mapQueue(row: any): QueuedInput {
@@ -1931,7 +1941,13 @@ function modelVisibleMessages(threadId: string) {
     .slice(-20)
     .map((item) => {
       if (!item.images || item.images.length === 0) {
-        if (item.role === "assistant") return new AIMessage({ content: item.content });
+        if (item.role === "assistant") {
+          const messageOptions: any = { content: item.content };
+          if (item.reasoningContent) {
+            messageOptions.additional_kwargs = { reasoning_content: item.reasoningContent };
+          }
+          return new AIMessage(messageOptions);
+        }
         if (item.role === "system") return new SystemMessage({ content: item.content });
         return new HumanMessage({ content: item.content });
       }
@@ -2772,6 +2788,53 @@ function tryCall<T>(fn: () => T): T | undefined {
   }
 }
 
+const EXCLUDED_DIRS = new Set(["node_modules", ".git", ".svn", "__pycache__", ".DS_Store", ".idea", ".vscode"]);
+const MAX_DIR_ENTRIES = 500;
+
+interface DirEntry {
+  path: string;
+  name: string;
+  type: "file" | "directory";
+  hasChildren?: boolean;
+}
+
+function listDirectory(dirPath: string): DirEntry[] {
+  if (!existsSync(dirPath)) throw new AppError("FILE_NOT_FOUND", `目录不存在：${dirPath}`);
+  const names = readdirSync(dirPath);
+  const entries: DirEntry[] = [];
+  for (const name of names) {
+    if (name.startsWith(".") || EXCLUDED_DIRS.has(name)) continue;
+    const fullPath = path.join(dirPath, name);
+    try {
+      const st = statSync(fullPath);
+      const entry: DirEntry = {
+        path: fullPath,
+        name,
+        type: st.isDirectory() ? "directory" : "file",
+      };
+      if (st.isDirectory()) {
+        try {
+          const children = readdirSync(fullPath).filter(
+            (c) => !c.startsWith(".") && !EXCLUDED_DIRS.has(c),
+          );
+          entry.hasChildren = children.length > 0;
+        } catch {
+          entry.hasChildren = false;
+        }
+      }
+      entries.push(entry);
+      if (entries.length >= MAX_DIR_ENTRIES) break;
+    } catch {
+      // Skip entries that can't be stat'd
+    }
+  }
+  entries.sort((a, b) => {
+    if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  return entries;
+}
+
 function registerIpcHandlers() {
   ipcMain.handle("any-jumper:pick-directory", async (event) => {
     const owner = BrowserWindow.fromWebContents(event.sender);
@@ -2877,6 +2940,22 @@ function registerIpcHandlers() {
         case "terminal_write": return terminalManager.write(args.id, args.data);
         case "terminal_resize": return terminalManager.resize(args.id, args.cols, args.rows);
         case "terminal_kill": return terminalManager.kill(args.id);
+        case "list_directory": return listDirectory(args.dirPath);
+        case "read_file_content": {
+          if (!existsSync(args.filePath)) throw new AppError("FILE_NOT_FOUND", `文件不存在：${args.filePath}`);
+          return readFileSync(args.filePath, "utf8");
+        }
+        case "get_file_info": {
+          if (!existsSync(args.filePath)) throw new AppError("FILE_NOT_FOUND", `文件不存在：${args.filePath}`);
+          const st = statSync(args.filePath);
+          return {
+            path: args.filePath,
+            name: path.basename(args.filePath),
+            type: st.isDirectory() ? "directory" : "file",
+            size: st.size,
+            modifiedAt: st.mtimeMs,
+          };
+        }
         default: throw new AppError("UNKNOWN_ERROR", `未知命令：${command}`);
       }
     } catch (error) {
@@ -2892,8 +2971,12 @@ function createWindow(workspaceId?: string, threadId?: string) {
     minWidth: 1040,
     minHeight: 720,
     title: "Any Jumper Desktop",
+    frame: false,
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 20, y: 20 },
+    transparent: true,
+    backgroundColor: "#00000000",
+    hasShadow: false,
     webPreferences: {
       preload: path.join(mainDir, "preload.cjs"),
       contextIsolation: true,

@@ -56,6 +56,40 @@ describe("App navigation shell", () => {
     expect(css).toContain("-webkit-app-region: no-drag");
   });
 
+  it("shows an inactive traffic-light placeholder when the window loses focus", () => {
+    const appSource = readProjectFile("src/app/App.tsx");
+    const electronSource = readProjectFile("electron/main.ts");
+    const css = readProjectFile("src/styles/theme.css");
+
+    expect(electronSource).toContain("trafficLightPosition: { x: 20, y: 20 }");
+    expect(css).toContain("--window-control-x: 20px;");
+    expect(css).toContain("--window-control-y: 20px;");
+    expect(css).toContain("--window-control-dot-size: 12px;");
+    expect(css).toContain("--window-control-dot-gap: 8px;");
+    expect(appSource).toContain("isWindowFocused");
+    expect(appSource).toContain("is-window-inactive");
+    expect(appSource).toContain("app-traffic-lights-placeholder");
+    expect(appSource).toContain('window.addEventListener("blur"');
+    expect(appSource).toContain('window.addEventListener("focus"');
+    expect(css).toContain(".app-traffic-lights-placeholder");
+    expect(css).toContain(".app-shell.is-window-inactive .app-traffic-lights-placeholder");
+    const placeholderBlock = css.match(/\.app-traffic-lights-placeholder\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    expect(placeholderBlock).toContain("top: var(--window-control-y);");
+    expect(placeholderBlock).toContain("left: var(--window-control-x);");
+    expect(placeholderBlock).toContain("width: calc(var(--window-control-dot-size) * 3 + var(--window-control-dot-gap) * 2);");
+    expect(placeholderBlock).toContain("height: var(--window-control-dot-size);");
+    expect(placeholderBlock).toContain("gap: var(--window-control-dot-gap);");
+    expect(placeholderBlock).toContain("background: transparent;");
+    expect(placeholderBlock).toContain("box-shadow: none;");
+    expect(placeholderBlock).not.toContain("border-radius: 999px;");
+    const dotBlock = css.match(/\.app-traffic-lights-placeholder span\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    expect(dotBlock).toContain("width: var(--window-control-dot-size);");
+    expect(dotBlock).toContain("height: var(--window-control-dot-size);");
+    expect(dotBlock).toContain("flex: 0 0 var(--window-control-dot-size);");
+    expect(css).toContain("background: var(--window-control-inactive-dot);");
+    expect(dotBlock).toContain("box-shadow: none;");
+  });
+
   it("keeps the agent sidebar and terminal toggles outside the macOS window controls", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
     const css = readProjectFile("src/styles/theme.css");
@@ -110,7 +144,7 @@ describe("App navigation shell", () => {
     expect(source).toContain('className="codex-project-tree"');
     expect(source).toContain('className="codex-project-row"');
     expect(source).toContain('className="codex-project-sessions"');
-    expect(source).toContain('className="codex-session-row is-nested"');
+    expect(source).toContain("codex-session-row is-nested");
     expect(source).toContain('className="codex-session-main"');
     expect(source).toContain('className="codex-session-action"');
     expect(source).toContain("removeThread(thread)");
@@ -156,10 +190,37 @@ describe("App navigation shell", () => {
 
     expect(source).not.toContain("codex-project-row ${workspace.id === workspaceId");
     expect(source).not.toContain("codex-session-row is-nested ${isActive");
-    expect(source).toContain("codex-session-dot");
+    expect(source).not.toContain("codex-session-dot");
     expect(css).not.toContain(".codex-project-row.is-active");
-    expect(css).not.toContain(".codex-session-row.is-active");
-    expect(css).toContain(".codex-session-dot");
+    expect(css).toContain(".codex-session-row.is-active");
+    expect(css).not.toContain(".codex-session-dot");
+  });
+
+  it("uses a rounded split-shell chrome for the agent workspace", () => {
+    const electronSource = readProjectFile("electron/main.ts");
+    const css = readProjectFile("src/styles/theme.css");
+
+    expect(css).toContain("--app-chrome-bg: #e6e4e0;");
+    expect(css).toContain("--agent-shell-gap: 8px;");
+    expect(css).toContain("--agent-window-radius: 24px;");
+    expect(css).toContain(".app-shell.is-agent-active");
+    expect(css).toContain("padding: var(--agent-shell-gap);");
+    expect(css).toContain("background: var(--app-chrome-bg);");
+    expect(css).toContain("border-radius: var(--agent-window-radius);");
+    expect(css).toContain("border-radius: var(--agent-panel-radius);");
+    const workbenchBlock = css.match(/\.agent-workbench\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    expect(workbenchBlock).toContain("background: transparent;");
+    const resizeHandleBlock = css.match(/\.resize-handle\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    expect(resizeHandleBlock).toContain("background: transparent;");
+    expect(resizeHandleBlock).not.toContain("background: var(--agent-gutter);");
+    expect(electronSource).toContain("frame: false");
+    expect(electronSource).toContain("transparent: true");
+    expect(electronSource).toContain('backgroundColor: "#00000000"');
+    expect(electronSource).toContain("hasShadow: false");
+    expect(css).toMatch(/html,\s*\nbody\s*\{[\s\S]*background:\s*transparent;/);
+    expect(css).toContain("overflow: hidden;");
+    expect(css).toContain("app-shell");
+    expect(css).toContain("box-shadow: inset 0 0 0 1px");
   });
 
   it("shows agent bridge in the main conversation area instead of the inspector tabs", () => {

@@ -194,6 +194,7 @@ export interface AgentItem {
   role: "system" | "user" | "assistant" | string;
   itemType: string;
   content: string;
+  reasoningContent?: string;
   status: string;
   toolCallId?: string;
   metadata?: Record<string, unknown>;

@@ -52,6 +52,29 @@ describe("AgentPage transcript message layout", () => {
     expect(slashItemBlock).toContain("flex: 0 0 auto;");
   });
 
+  it("removes the native rectangular focus outline from the rich composer editor", () => {
+    const css = readProjectFile("src/styles/theme.css");
+    const richComposerBlock = css.match(/(?:^|\n)\.composer \.rich-composer-editor\.ProseMirror\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+    const richComposerFocusBlock = css.match(/(?:^|\n)\.composer \.rich-composer-editor\.ProseMirror:focus(?:,\s*\n\.composer \.rich-composer-editor\.ProseMirror:focus-visible)?\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+
+    expect(css).not.toContain(".composer .rich-composer-editor .ProseMirror");
+    expect(richComposerBlock).toContain("outline: none;");
+    expect(richComposerFocusBlock).toContain("outline: none;");
+  });
+
+  it("keeps the rich composer placeholder visually quiet", () => {
+    const css = readProjectFile("src/styles/theme.css");
+    const placeholderBlock = css.match(/(?:^|\n)\.composer \.rich-composer-editor\.ProseMirror p\.is-editor-empty:first-child::before\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+
+    expect(css).toContain("--composer-placeholder:");
+    expect(placeholderBlock).toContain("color: var(--composer-placeholder);");
+    expect(placeholderBlock).toContain("font-weight: var(--font-weight-regular);");
+    expect(placeholderBlock).not.toContain("var(--text-muted)");
+  });
+
   it("keeps keyboard-selected slash command suggestions scrolled into view", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
 
@@ -169,7 +192,7 @@ describe("AgentPage transcript message layout", () => {
     const mainBeforeBlock = css.match(/\.agent-main::before\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const mainAfterBlock = css.match(/\.agent-main::after\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
 
-    expect(source).toContain('className={`transcript ${visibleItems.length === 0 ? "is-empty-home" : ""}`}');
+    expect(source).toMatch(/Conversation[\s\S]*is-empty-home/);
     expect(css).toContain(".agent-main::before");
     expect(css).toContain(".agent-main::after");
     expect(css).toContain(".transcript.is-empty-home");
@@ -254,30 +277,27 @@ describe("AgentPage transcript message layout", () => {
 
   it("uses smart autoscroll for the transcript and expanded turn trace", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
+    const conversationSource = readProjectFile("src/components/conversation/Conversation.tsx");
     const css = readProjectFile("src/styles/theme.css");
 
-    expect(source).toContain("transcriptRef");
-    expect(source).toContain("handleTranscriptScroll");
-    expect(source).toContain("transcriptPinnedToBottom");
-    expect(source).toContain("transcript-jump-to-latest");
+    expect(source).toContain("ConversationScrollButton");
+    expect(conversationSource).toContain("use-stick-to-bottom");
+    expect(source).toContain("<Conversation");
     expect(source).toContain("traceCardRef");
     expect(source).toContain("handleTraceScroll");
     expect(source).toContain("tracePinnedToBottom");
     expect(source).toContain("turn-trace-jump-to-latest");
     expect(source).toContain("isNearScrollBottom");
     expect(source).toContain("scrollElementToBottom");
-    expect(css).toContain(".transcript-jump-to-latest");
     expect(css).toContain(".turn-trace-jump-to-latest");
 
-    const transcriptStart = source.indexOf("ref={transcriptRef}");
-    const transcriptJump = source.indexOf('className="transcript-jump-to-latest"', transcriptStart);
+    const transcriptStart = source.indexOf("<Conversation");
+    const scrollButton = source.indexOf("ConversationScrollButton", transcriptStart);
     const composerStart = source.indexOf("<AgentComposer", transcriptStart);
-    const transcriptJumpBlock = css.match(/\.transcript-jump-to-latest\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
 
-    expect(transcriptJump).toBeGreaterThan(transcriptStart);
-    expect(transcriptJump).toBeLessThan(composerStart);
-    expect(transcriptJumpBlock).toContain("position: sticky;");
-    expect(transcriptJumpBlock).not.toContain("position: absolute;");
+    expect(scrollButton).toBeGreaterThan(transcriptStart);
+    expect(scrollButton).toBeLessThan(composerStart);
+    expect(conversationSource).toContain("StickToBottom");
   });
 
   it("keeps expanded trace as an ordered timeline with folded tools and approvals", () => {
@@ -372,7 +392,7 @@ describe("AgentPage transcript message layout", () => {
   it("reuses the composer send button as the only running stop control", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
     const headerActionsIndex = source.indexOf('className="agent-status-actions"');
-    const transcriptIndex = source.indexOf("className={`transcript");
+    const transcriptIndex = source.indexOf("<Conversation");
     const headerActionsBlock = source.slice(headerActionsIndex, transcriptIndex);
 
     expect(source).toContain('isRunning={activeThread?.status === "running"}');
