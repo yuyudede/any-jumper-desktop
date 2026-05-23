@@ -178,7 +178,6 @@ describe("App navigation shell", () => {
     expect(source).toContain("aria-expanded={!projectTreeCollapsed}");
     expect(source).toContain("onClick={toggleProjectTreeCollapsed}");
     expect(source).toContain("{!projectTreeCollapsed ? (");
-    expect(source).toContain("{activeWorkspace && !projectTreeCollapsed ? (");
     expect(source).not.toContain("codex-project-section-trigger");
     expect(source).not.toContain("agent-bridge-entry codex-project");
     expect(css).toContain(".agent-sidebar-head-toggle");
@@ -222,7 +221,7 @@ describe("App navigation shell", () => {
     expect(css).toMatch(/html,\s*\nbody\s*\{[\s\S]*background:\s*transparent;/);
     expect(css).toContain("overflow: hidden;");
     expect(css).toContain("app-shell");
-    expect(css).toContain("box-shadow: inset 0 0 0 1px");
+    expect(css).toContain("inset 0 0 0 1px");
   });
 
   it("shows agent bridge in the main conversation area instead of the inspector tabs", () => {

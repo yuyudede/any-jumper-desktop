@@ -181,6 +181,12 @@ export const desktopApi = {
   gitLog(rootPath: string, limit = 20) {
     return invoke<string>("git_log", { rootPath, limit });
   },
+  gitRevertFile(rootPath: string, filePath: string) {
+    return invoke<string>("git_revert_file", { rootPath, filePath });
+  },
+  readFileContentAtRef(rootPath: string, filePath: string, ref = "HEAD") {
+    return invoke<string>("read_file_content_at_ref", { rootPath, filePath, ref });
+  },
   getProjectContext(projectPath: string) {
     return invoke<ProjectContext>("get_project_context", { projectPath });
   },
@@ -213,6 +219,9 @@ export const desktopApi = {
   },
   readFileContent(filePath: string) {
     return invoke<string>("read_file_content", { filePath });
+  },
+  readFileBase64(filePath: string) {
+    return invoke<string>("read_file_base64", { filePath });
   },
   getFileInfo(filePath: string) {
     return invoke<{ path: string; name: string; type: string; size: number; modifiedAt: number }>("get_file_info", { filePath });

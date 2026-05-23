@@ -220,18 +220,17 @@ export const ScrollMinimap = memo(function ScrollMinimap() {
           className={[
             "scroll-minimap-panel",
             "absolute right-[14px] top-2 bottom-2 z-20 w-[280px]",
-            "bg-background border border-border rounded-lg shadow-xl",
             "flex flex-col overflow-hidden",
           ].join(" ")}
           onMouseEnter={handlePanelEnter}
           onMouseLeave={handlePanelLeave}
         >
           {/* Header with search */}
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-            <Search size={14} className="text-muted-foreground" />
+          <div className="scroll-minimap-panel-header flex items-center gap-2 px-3 py-2">
+            <Search size={14} className="scroll-minimap-panel-icon" />
             <input
               type="text"
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              className="scroll-minimap-panel-search flex-1 bg-transparent text-sm outline-none"
               placeholder="搜索消息..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -239,21 +238,21 @@ export const ScrollMinimap = memo(function ScrollMinimap() {
             {searchQuery && (
               <button
                 type="button"
-                className="text-muted-foreground hover:text-foreground"
+                className="scroll-minimap-panel-clear"
                 onClick={() => setSearchQuery("")}
               >
                 <X size={14} />
               </button>
             )}
-            <span className="text-xs text-muted-foreground tabular-nums">
+            <span className="scroll-minimap-panel-count text-xs tabular-nums">
               {filteredItems.length}/{items.length}
             </span>
           </div>
 
           {/* Message list */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="scroll-minimap-panel-list flex-1 overflow-y-auto">
             {filteredItems.length === 0 ? (
-              <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+              <div className="scroll-minimap-panel-empty px-3 py-6 text-center text-sm">
                 未找到匹配消息
               </div>
             ) : (
@@ -262,25 +261,23 @@ export const ScrollMinimap = memo(function ScrollMinimap() {
                   key={item.id}
                   type="button"
                   className={[
-                    "w-full text-left px-3 py-2 hover:bg-foreground/5 transition-colors border-b border-border/50",
-                    item.role === "user" ? "border-l-2 border-l-primary/40" : "",
+                    "scroll-minimap-panel-item w-full text-left px-3 py-2 transition-colors",
+                    item.role === "user" ? "is-user" : "",
                   ].join(" ")}
                   onClick={() => scrollToMessage(item.id)}
                 >
                   <div className="flex items-center gap-1.5 mb-0.5">
                     <span
                       className={[
-                        "text-[10px] font-medium uppercase",
-                        item.role === "user"
-                          ? "text-primary"
-                          : "text-muted-foreground",
+                        "scroll-minimap-panel-role text-[10px] font-medium uppercase",
+                        item.role === "user" ? "is-user" : "",
                       ].join(" ")}
                     >
                       {item.role === "user" ? "You" : "AI"}
                     </span>
                   </div>
                   <p
-                    className="text-xs text-muted-foreground line-clamp-2"
+                    className="scroll-minimap-panel-preview text-xs line-clamp-2"
                     dangerouslySetInnerHTML={{
                       __html: highlightMatch(item.preview, searchQuery),
                     }}

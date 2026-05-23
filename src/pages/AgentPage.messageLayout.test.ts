@@ -75,6 +75,29 @@ describe("AgentPage transcript message layout", () => {
     expect(placeholderBlock).not.toContain("var(--text-muted)");
   });
 
+  it("gives the scroll minimap popover a translucent neutral macOS glass treatment", () => {
+    const css = readProjectFile("src/styles/theme.css");
+    const panelBlock = css.match(/(?:^|\n)\.scroll-minimap-panel\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+    const panelBeforeBlock = css.match(/(?:^|\n)\.scroll-minimap-panel::before\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+
+    expect(css).toContain("--scroll-minimap-glass-bg:");
+    expect(css).toContain("--scroll-minimap-glass-border:");
+    expect(css).toContain("rgba(160, 168, 172, 0.58)");
+    expect(css).toContain("rgba(132, 140, 145, 0.50)");
+    expect(css).not.toContain("rgba(106, 146, 178, 0.82)");
+    expect(css).not.toContain("rgba(65, 105, 136, 0.76)");
+    expect(panelBlock).toContain("background: var(--scroll-minimap-glass-bg);");
+    expect(panelBlock).toContain("backdrop-filter: blur(26px) saturate(150%) contrast(104%);");
+    expect(panelBlock).toContain("border-radius: 22px;");
+    expect(panelBlock).toContain("border: 1px solid var(--scroll-minimap-glass-border);");
+    expect(panelBlock).toContain("box-shadow:");
+    expect(panelBlock).toContain("overflow: hidden;");
+    expect(panelBeforeBlock).toContain("background:");
+    expect(panelBeforeBlock).toContain("box-shadow: inset 0 1px 0 var(--scroll-minimap-glass-inner);");
+  });
+
   it("keeps keyboard-selected slash command suggestions scrolled into view", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
 
@@ -178,7 +201,7 @@ describe("AgentPage transcript message layout", () => {
     const shellBlock = css.match(/\.shadcn-agent-shell\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const mainPanelBlock = css.match(/\.content-grid\.is-agent-grid\s+\.main-panel\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
 
-    expect(workbenchBlock).toContain("border-radius");
+    expect(workbenchBlock).not.toContain("border-radius");
     expect(workbenchBlock).toContain("background: var(--panel);");
     expect(workbenchBlock).not.toContain("border:");
     expect(workbenchBlock).not.toContain("box-shadow");
@@ -223,6 +246,32 @@ describe("AgentPage transcript message layout", () => {
     expect(css).not.toContain(".agent-inspector-resizer");
   });
 
+  it("styles the status header controls as compact icon hit targets", () => {
+    const source = readProjectFile("src/pages/AgentPage.tsx");
+    const css = readProjectFile("src/styles/theme.css");
+    const actionsBlocks = Array.from(css.matchAll(/(?:^|\n)\.agent-status-actions\s*\{(?<body>[^}]*)\}/g));
+    const actionsBlock = actionsBlocks.find((match) => match.groups?.body.includes("flex: 0 0 auto;"))
+      ?.groups?.body ?? "";
+    const buttonBlock = css.match(/(?:^|\n)\.agent-header-action\.shadcn-button\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+    const selectedBlock = css.match(/(?:^|\n)\.agent-header-action\.shadcn-button(?:\.is-active|\.is-collapsed)[\s\S]*?\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+
+    expect(source).toContain("agent-header-action agent-sidebar-toggle");
+    expect(source).toContain("agent-header-action agent-terminal-toggle");
+    expect(source).toContain("agent-header-action agent-right-panel-toggle");
+    expect(source).toContain("agent-header-action agent-theme-toggle");
+    expect(source).toContain('aria-pressed={themeMode === "dark"}');
+    expect(actionsBlock).toContain("gap: 8px;");
+    expect(actionsBlock).toContain("padding: 0 2px;");
+    expect(buttonBlock).toContain("width: 34px;");
+    expect(buttonBlock).toContain("height: 34px;");
+    expect(buttonBlock).toContain("border-radius: 10px;");
+    expect(buttonBlock).toContain("background: color-mix(in srgb, var(--panel-soft) 42%, transparent);");
+    expect(selectedBlock).toContain("background: color-mix(in srgb, var(--panel-soft) 74%, var(--panel));");
+    expect(selectedBlock).toContain("box-shadow:");
+  });
+
   it("uses a two-column workbench so the transcript and composer keep the main track", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
     const css = readProjectFile("src/styles/theme.css");
@@ -237,6 +286,32 @@ describe("AgentPage transcript message layout", () => {
     expect(compactMedia).not.toContain(".agent-inspector");
     expect(composerLeftBlock).toContain("display: flex;");
     expect(composerLeftBlock).toContain("flex-wrap: wrap;");
+  });
+
+  it("keeps right panel resizing anchored to the right panel instead of the main track", () => {
+    const source = readProjectFile("src/pages/AgentPage.tsx");
+    const css = readProjectFile("src/styles/theme.css");
+    const contentRowBlock = css.match(/(?:^|\n)\.agent-content-row\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const contentRowWithPanelBlock = css.match(/(?:^|\n)\.agent-content-row\.has-right-panel\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+    const mainBlock = css.match(/(?:^|\n)\.agent-content-row > \.agent-main\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+    const resizeBlock = css.match(/(?:^|\n)\.agent-right-resize\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const panelBlock = css.match(/(?:^|\n)\.agent-right-panel\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+
+    expect(source).toContain("--agent-right-panel-width");
+    expect(source).toContain("setRightPanelWidth(next);");
+    expect(source).not.toContain("nextElementSibling as HTMLElement");
+    expect(source).toContain("has-right-panel");
+    expect(contentRowBlock).toContain("display: grid;");
+    expect(contentRowBlock).toContain("grid-template-columns: minmax(0, 1fr);");
+    expect(contentRowWithPanelBlock).toContain("grid-template-columns: minmax(0, 1fr) 6px var(--agent-right-panel-width);");
+    expect(mainBlock).toContain("min-width: 0;");
+    expect(resizeBlock).not.toContain("position: absolute;");
+    expect(resizeBlock).toContain("width: 6px;");
+    expect(panelBlock).not.toContain("position: absolute;");
+    expect(panelBlock).toContain("width: var(--agent-right-panel-width);");
+    expect(panelBlock).toContain("min-width: 0;");
   });
 
   it("shows pending approval actions inside the inline turn trace", () => {
@@ -470,13 +545,13 @@ describe("AgentPage transcript message layout", () => {
 
     try {
       searchOutput = execFileSync(
-        "rg",
+        "grep",
         [
-          "-n",
-          "from\\s+[\"']antd[\"']|from\\s+[\"']@ant-design/icons[\"']|antd|ant-design",
+          "-rn",
+          "-E",
+          "from\\s+['\"]antd['\"]|from\\s+['\"]@ant-design/icons['\"]",
           "src",
-          "--glob",
-          "!src/pages/AgentPage.messageLayout.test.ts",
+          "--exclude=AgentPage.messageLayout.test.ts",
         ],
         { cwd: projectRoot, encoding: "utf8" },
       );

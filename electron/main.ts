@@ -2924,6 +2924,11 @@ function registerIpcHandlers() {
         case "git_pull": return gitRun(args.rootPath, ["pull", "--ff-only"]);
         case "git_push": return gitRun(args.rootPath, ["push"]);
         case "git_log": return gitRun(args.rootPath, ["log", "--oneline", "--decorate", "--max-count", String(args.limit ?? 20)]);
+        case "git_revert_file": return gitRun(args.rootPath, ["checkout", "--", args.filePath]);
+        case "read_file_content_at_ref": {
+          const ref = (args.ref as string) || "HEAD";
+          return gitRun(args.rootPath, ["show", `${ref}:${args.filePath}`]);
+        }
         case "get_project_context": return getProjectContext(args.projectPath);
         case "list_idea_project_tasks": return discoverIdeaProjectTasks();
         case "get_settings": return settings.get();
@@ -2944,6 +2949,23 @@ function registerIpcHandlers() {
         case "read_file_content": {
           if (!existsSync(args.filePath)) throw new AppError("FILE_NOT_FOUND", `文件不存在：${args.filePath}`);
           return readFileSync(args.filePath, "utf8");
+        }
+        case "read_file_base64": {
+          if (!existsSync(args.filePath)) throw new AppError("FILE_NOT_FOUND", `文件不存在：${args.filePath}`);
+          const buf = readFileSync(args.filePath);
+          const ext = path.extname(args.filePath).toLowerCase();
+          const mimeTypes: Record<string, string> = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+            ".svg": "image/svg+xml",
+            ".bmp": "image/bmp",
+            ".ico": "image/x-icon",
+          };
+          const mime = mimeTypes[ext] || "application/octet-stream";
+          return `data:${mime};base64,${buf.toString("base64")}`;
         }
         case "get_file_info": {
           if (!existsSync(args.filePath)) throw new AppError("FILE_NOT_FOUND", `文件不存在：${args.filePath}`);

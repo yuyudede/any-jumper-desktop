@@ -86,7 +86,6 @@ import { MarkdownRenderer } from "../components/MarkdownRenderer";
 import { Message, MessageBody, MessageActions, MessageImageGrid } from "../components/message";
 import { Conversation, ConversationScrollButton } from "../components/conversation";
 import { ResizeHandle } from "../components/ResizeHandle";
-import { WorkspaceFileTree } from "../components/WorkspaceFileTree";
 import { PreviewPanel, type PreviewFile } from "../components/PreviewPanel";
 import { RightPanel } from "../components/RightPanel";
 import ModelPage from "./ModelPage";
@@ -174,6 +173,7 @@ const permissionOptions = [
 const SIDEBAR_EXPANDED_WORKSPACES_STORAGE_KEY = "any-jumper-sidebar-expanded-workspaces";
 const PROJECT_TREE_COLLAPSED_STORAGE_KEY = "any-jumper-sidebar-project-tree-collapsed";
 const TRACE_THOUGHT_VISIBLE_LIMIT = 24;
+const RIGHT_PANEL_MIN_WIDTH = 220;
 type ActiveMainView = "chat" | "bridge" | "modelConfig" | "plugin";
 
 export default function AgentPage({
@@ -212,6 +212,7 @@ export default function AgentPage({
   const [rightPanelOpen, setRightPanelOpen] = useState(
     () => localStorage.getItem("any-jumper-right-panel-open") === "true",
   );
+  const [rightPanelResizing, setRightPanelResizing] = useState(false);
   const [rightPanelWidth, setRightPanelWidth] = useState(() => {
     const stored = localStorage.getItem("any-jumper-right-panel-width");
     return stored ? Number(stored) : 300;
@@ -240,16 +241,6 @@ export default function AgentPage({
   const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
   const [previewSplitRatio, setPreviewSplitRatio] = useState(0.45);
 
-  const handleFileOpen = useCallback(async (filePath: string) => {
-    try {
-      const content = await desktopApi.readFileContent(filePath);
-      setPreviewFile({ path: filePath, content });
-      setPreviewOpen(true);
-    } catch {
-      showNotice({ tone: "danger", title: "无法读取文件", detail: filePath });
-    }
-  }, []);
-
   const handlePreviewClose = useCallback(() => {
     setPreviewOpen(false);
     setPreviewFile(null);
@@ -272,7 +263,6 @@ export default function AgentPage({
   const [expandedTraceTurns, setExpandedTraceTurns] = useState<Record<string, boolean>>({});
   const [notice, setNotice] = useState<NoticeState>();
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>();
-  const [copiedPath, setCopiedPath] = useState(false);
   const refreshTimer = useRef<number>();
   const noticeTimer = useRef<number>();
   const initialSelectionRef = useRef(readInitialAgentSelection());
@@ -1290,39 +1280,16 @@ export default function AgentPage({
             </div>
           ) : null}
 
-          {activeWorkspace && !projectTreeCollapsed ? (
-            <>
-              <WorkspaceFileTree
-                rootPath={activeWorkspace.rootPath}
-                onFileOpen={handleFileOpen}
-              />
-              <div className="agent-sidebar-foot">
-                <span><Info size={14} /> Current Path</span>
-                <div className="agent-sidebar-foot-path">
-                  <code title={activeWorkspace.rootPath}>{activeWorkspace.rootPath}</code>
-                  <button
-                    type="button"
-                    className="agent-sidebar-foot-copy"
-                    aria-label={copiedPath ? "已复制" : "复制路径"}
-                    onClick={() => {
-                      void navigator.clipboard.writeText(activeWorkspace.rootPath);
-                      setCopiedPath(true);
-                      window.setTimeout(() => setCopiedPath(false), 1500);
-                    }}
-                  >
-                    {copiedPath ? <Check size={12} /> : <Copy size={12} />}
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : null}
         </aside>
 
         {!sidebarCollapsed && (
           <ResizeHandle onResize={handleSidebarResize} />
         )}
 
-        <div className="agent-content-row">
+        <div
+          className={`agent-content-row ${rightPanelOpen && activeWorkspace ? "has-right-panel" : ""}`}
+          style={{ "--agent-right-panel-width": `${rightPanelWidth}px` } as React.CSSProperties}
+        >
         <section className="agent-main">
           <header className="agent-status-strip">
             <div className="agent-status-copy">
@@ -1363,7 +1330,7 @@ export default function AgentPage({
             </div>
             <div className="agent-status-actions">
               <IconButton
-                className={`agent-sidebar-toggle agent-side-control ${sidebarCollapsed ? "is-collapsed" : ""}`}
+                className={`agent-header-action agent-sidebar-toggle agent-side-control ${sidebarCollapsed ? "is-collapsed" : ""}`}
                 label={sidebarCollapsed ? "展开左侧栏" : "收起左侧栏"}
                 aria-pressed={!sidebarCollapsed}
                 onClick={() => setSidebarCollapsed((v) => !v)}
@@ -1372,7 +1339,7 @@ export default function AgentPage({
               </IconButton>
               {activeMainView === "chat" ? (
                 <IconButton
-                  className={`agent-terminal-toggle agent-side-control ${terminalVisible ? "is-collapsed" : ""}`}
+                  className={`agent-header-action agent-terminal-toggle agent-side-control ${terminalVisible ? "is-collapsed" : ""}`}
                   label={terminalVisible ? "收起下侧栏终端" : "展开下侧栏终端"}
                   aria-pressed={terminalVisible}
                   onClick={() => setTerminalVisible((v) => !v)}
@@ -1381,7 +1348,7 @@ export default function AgentPage({
                 </IconButton>
               ) : null}
               <IconButton
-                className={`agent-right-panel-toggle agent-side-control ${rightPanelOpen ? "is-active" : ""}`}
+                className={`agent-header-action agent-right-panel-toggle agent-side-control ${rightPanelOpen ? "is-active" : ""}`}
                 label={rightPanelOpen ? "收起右侧面板" : "展开右侧面板"}
                 aria-pressed={rightPanelOpen}
                 onClick={() => {
@@ -1393,8 +1360,13 @@ export default function AgentPage({
                 {rightPanelOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
               </IconButton>
               {onToggleTheme ? (
-                <IconButton className="agent-theme-toggle" label={`切换到${themeMode === "dark" ? "浅色" : "深色"}主题`} onClick={onToggleTheme}>
-                  {themeMode === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+                <IconButton
+                  className={`agent-header-action agent-theme-toggle ${themeMode === "dark" ? "is-active" : ""}`}
+                  label={`切换到${themeMode === "dark" ? "浅色" : "深色"}主题`}
+                  aria-pressed={themeMode === "dark"}
+                  onClick={onToggleTheme}
+                >
+                  {themeMode === "dark" ? <Sun size={15} /> : <Moon size={15} />}
                 </IconButton>
               ) : null}
             </div>
@@ -2050,31 +2022,22 @@ export default function AgentPage({
               className="agent-right-resize"
               onMouseDown={(e) => {
                 e.preventDefault();
-                const panelEl =
-                  (e.currentTarget as HTMLElement)
-                    .nextElementSibling as HTMLElement | null;
-                if (!panelEl) return;
                 const startX = e.clientX;
-                const startWidth = panelEl.offsetWidth;
+                const startWidth = rightPanelWidth;
                 document.body.style.cursor = "col-resize";
                 document.body.style.userSelect = "none";
+                setRightPanelResizing(true);
                 const onMove = (ev: MouseEvent) => {
-                  const delta = ev.clientX - startX;
-                  const next = Math.min(
-                    480,
-                    Math.max(220, startWidth - delta),
-                  );
-                  panelEl.style.width = `${next}px`;
+                  const delta = startX - ev.clientX;
+                  const next = Math.max(RIGHT_PANEL_MIN_WIDTH, startWidth + delta);
+                  setRightPanelWidth(next);
                 };
                 const onUp = () => {
                   document.body.style.cursor = "";
                   document.body.style.userSelect = "";
+                  setRightPanelResizing(false);
                   document.removeEventListener("mousemove", onMove);
                   document.removeEventListener("mouseup", onUp);
-                  const finalWidth = parseInt(panelEl.style.width, 10);
-                  if (!isNaN(finalWidth)) {
-                    setRightPanelWidth(finalWidth);
-                  }
                 };
                 document.addEventListener("mousemove", onMove);
                 document.addEventListener("mouseup", onUp);
@@ -2083,6 +2046,7 @@ export default function AgentPage({
             <RightPanel
               rootPath={activeWorkspace.rootPath}
               width={rightPanelWidth}
+              resizing={rightPanelResizing}
               onClose={() => {
                 setRightPanelOpen(false);
                 localStorage.setItem("any-jumper-right-panel-open", "false");

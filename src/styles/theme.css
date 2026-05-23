@@ -30,6 +30,43 @@
   --message-user-border: rgba(36, 36, 36, 0.04);
   --surface-raised: rgba(255, 255, 255, 0.82);
   --surface-glass: rgba(255, 255, 255, 0.68);
+  --surface-glass-strong: rgba(255, 255, 255, 0.88);
+  --surface-glass-subtle: rgba(255, 255, 255, 0.42);
+  --shadow-elevation-1:
+    0 1px 2px rgba(24, 24, 22, 0.06),
+    0 2px 4px rgba(24, 24, 22, 0.06),
+    0 4px 12px rgba(24, 24, 22, 0.08);
+  --shadow-elevation-2:
+    0 1px 2px rgba(24, 24, 22, 0.06),
+    0 4px 8px rgba(24, 24, 22, 0.08),
+    0 12px 28px rgba(24, 24, 22, 0.11);
+  --shadow-elevation-3:
+    0 1px 2px rgba(24, 24, 22, 0.08),
+    0 8px 16px rgba(24, 24, 22, 0.10),
+    0 20px 48px rgba(24, 24, 22, 0.15);
+  --ambient-warm: radial-gradient(
+    ellipse 640px 480px at 15% 8%,
+    color-mix(in srgb, var(--accent-warm) 18%, transparent) 0%,
+    transparent 64%
+  );
+  --ambient-cool: radial-gradient(
+    ellipse 520px 400px at 82% 92%,
+    color-mix(in srgb, var(--text) 5%, transparent) 0%,
+    transparent 60%
+  );
+  --noise-texture: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
+  --vignette: radial-gradient(ellipse at center, transparent 40%, rgba(24, 24, 22, 0.055) 100%);
+  --rim-highlight: 0 1px 0 rgba(255, 255, 255, 0.90) inset;
+  --rim-highlight-strong: 0 1px 0 rgba(255, 255, 255, 0.96) inset;
+  --scroll-minimap-glass-bg:
+    radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.28), transparent 34%),
+    linear-gradient(145deg, rgba(160, 168, 172, 0.58) 0%, rgba(132, 140, 145, 0.50) 100%);
+  --scroll-minimap-glass-border: rgba(255, 255, 255, 0.34);
+  --scroll-minimap-glass-inner: rgba(255, 255, 255, 0.38);
+  --scroll-minimap-glass-shadow: rgba(34, 38, 42, 0.18);
+  --scroll-minimap-glass-text: rgba(24, 26, 28, 0.92);
+  --scroll-minimap-glass-muted: rgba(36, 40, 43, 0.66);
+  --scroll-minimap-glass-hover: rgba(255, 255, 255, 0.15);
   --shadow-soft: 0 20px 50px rgba(24, 24, 22, 0.09);
   --app-chrome-bg: #e6e4e0;
   --agent-gutter: #dedbd6;
@@ -68,6 +105,43 @@
     --message-user-border: rgba(255, 255, 255, 0.04);
     --surface-raised: rgba(31, 32, 35, 0.84);
     --surface-glass: rgba(28, 29, 32, 0.72);
+    --surface-glass-strong: rgba(28, 29, 32, 0.88);
+    --surface-glass-subtle: rgba(28, 29, 32, 0.36);
+    --shadow-elevation-1:
+      0 1px 2px rgba(0, 0, 0, 0.07),
+      0 2px 4px rgba(0, 0, 0, 0.07),
+      0 4px 12px rgba(0, 0, 0, 0.09);
+    --shadow-elevation-2:
+      0 1px 2px rgba(0, 0, 0, 0.07),
+      0 4px 8px rgba(0, 0, 0, 0.09),
+      0 12px 28px rgba(0, 0, 0, 0.12);
+    --shadow-elevation-3:
+      0 1px 2px rgba(0, 0, 0, 0.09),
+      0 8px 16px rgba(0, 0, 0, 0.11),
+      0 20px 48px rgba(0, 0, 0, 0.16);
+    --ambient-warm: radial-gradient(
+      ellipse 640px 480px at 15% 8%,
+      color-mix(in srgb, var(--accent-warm) 14%, transparent) 0%,
+      transparent 64%
+    );
+    --ambient-cool: radial-gradient(
+      ellipse 520px 400px at 82% 92%,
+      color-mix(in srgb, var(--text) 1.8%, transparent) 0%,
+      transparent 60%
+    );
+    --noise-texture: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
+    --vignette: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.06) 100%);
+    --rim-highlight: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+    --rim-highlight-strong: 0 1px 0 rgba(255, 255, 255, 0.12) inset;
+    --scroll-minimap-glass-bg:
+      radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.16), transparent 34%),
+      linear-gradient(145deg, rgba(120, 128, 132, 0.52) 0%, rgba(86, 94, 99, 0.48) 100%);
+    --scroll-minimap-glass-border: rgba(255, 255, 255, 0.22);
+    --scroll-minimap-glass-inner: rgba(255, 255, 255, 0.20);
+    --scroll-minimap-glass-shadow: rgba(0, 0, 0, 0.26);
+    --scroll-minimap-glass-text: rgba(246, 247, 248, 0.90);
+    --scroll-minimap-glass-muted: rgba(232, 235, 237, 0.66);
+    --scroll-minimap-glass-hover: rgba(255, 255, 255, 0.10);
     --shadow-soft: 0 22px 58px rgba(0, 0, 0, 0.32);
     --app-chrome-bg: #0d0e0f;
     --agent-gutter: #101113;
@@ -98,6 +172,43 @@
   --message-user-border: rgba(36, 36, 36, 0.04);
   --surface-raised: rgba(255, 255, 255, 0.82);
   --surface-glass: rgba(255, 255, 255, 0.68);
+  --surface-glass-strong: rgba(255, 255, 255, 0.88);
+  --surface-glass-subtle: rgba(255, 255, 255, 0.42);
+  --shadow-elevation-1:
+    0 1px 2px rgba(24, 24, 22, 0.06),
+    0 2px 4px rgba(24, 24, 22, 0.06),
+    0 4px 12px rgba(24, 24, 22, 0.08);
+  --shadow-elevation-2:
+    0 1px 2px rgba(24, 24, 22, 0.06),
+    0 4px 8px rgba(24, 24, 22, 0.08),
+    0 12px 28px rgba(24, 24, 22, 0.11);
+  --shadow-elevation-3:
+    0 1px 2px rgba(24, 24, 22, 0.08),
+    0 8px 16px rgba(24, 24, 22, 0.10),
+    0 20px 48px rgba(24, 24, 22, 0.15);
+  --ambient-warm: radial-gradient(
+    ellipse 640px 480px at 15% 8%,
+    color-mix(in srgb, var(--accent-warm) 18%, transparent) 0%,
+    transparent 64%
+  );
+  --ambient-cool: radial-gradient(
+    ellipse 520px 400px at 82% 92%,
+    color-mix(in srgb, var(--text) 5%, transparent) 0%,
+    transparent 60%
+  );
+  --noise-texture: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
+  --vignette: radial-gradient(ellipse at center, transparent 40%, rgba(24, 24, 22, 0.055) 100%);
+  --rim-highlight: 0 1px 0 rgba(255, 255, 255, 0.90) inset;
+  --rim-highlight-strong: 0 1px 0 rgba(255, 255, 255, 0.96) inset;
+  --scroll-minimap-glass-bg:
+    radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.28), transparent 34%),
+    linear-gradient(145deg, rgba(160, 168, 172, 0.58) 0%, rgba(132, 140, 145, 0.50) 100%);
+  --scroll-minimap-glass-border: rgba(255, 255, 255, 0.34);
+  --scroll-minimap-glass-inner: rgba(255, 255, 255, 0.38);
+  --scroll-minimap-glass-shadow: rgba(34, 38, 42, 0.18);
+  --scroll-minimap-glass-text: rgba(24, 26, 28, 0.92);
+  --scroll-minimap-glass-muted: rgba(36, 40, 43, 0.66);
+  --scroll-minimap-glass-hover: rgba(255, 255, 255, 0.15);
   --shadow-soft: 0 20px 50px rgba(24, 24, 22, 0.09);
   --app-chrome-bg: #e6e4e0;
   --agent-gutter: #dedbd6;
@@ -127,6 +238,43 @@
   --message-user-border: rgba(255, 255, 255, 0.04);
   --surface-raised: rgba(31, 32, 35, 0.84);
   --surface-glass: rgba(28, 29, 32, 0.72);
+  --surface-glass-strong: rgba(28, 29, 32, 0.88);
+  --surface-glass-subtle: rgba(28, 29, 32, 0.36);
+  --shadow-elevation-1:
+    0 1px 2px rgba(0, 0, 0, 0.07),
+    0 2px 4px rgba(0, 0, 0, 0.07),
+    0 4px 12px rgba(0, 0, 0, 0.09);
+  --shadow-elevation-2:
+    0 1px 2px rgba(0, 0, 0, 0.07),
+    0 4px 8px rgba(0, 0, 0, 0.09),
+    0 12px 28px rgba(0, 0, 0, 0.12);
+  --shadow-elevation-3:
+    0 1px 2px rgba(0, 0, 0, 0.09),
+    0 8px 16px rgba(0, 0, 0, 0.11),
+    0 20px 48px rgba(0, 0, 0, 0.16);
+  --ambient-warm: radial-gradient(
+    ellipse 640px 480px at 15% 8%,
+    color-mix(in srgb, var(--accent-warm) 14%, transparent) 0%,
+    transparent 64%
+  );
+  --ambient-cool: radial-gradient(
+    ellipse 520px 400px at 82% 92%,
+    color-mix(in srgb, var(--text) 1.8%, transparent) 0%,
+    transparent 60%
+  );
+  --noise-texture: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
+  --vignette: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.06) 100%);
+  --rim-highlight: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  --rim-highlight-strong: 0 1px 0 rgba(255, 255, 255, 0.12) inset;
+  --scroll-minimap-glass-bg:
+    radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.16), transparent 34%),
+    linear-gradient(145deg, rgba(120, 128, 132, 0.52) 0%, rgba(86, 94, 99, 0.48) 100%);
+  --scroll-minimap-glass-border: rgba(255, 255, 255, 0.22);
+  --scroll-minimap-glass-inner: rgba(255, 255, 255, 0.20);
+  --scroll-minimap-glass-shadow: rgba(0, 0, 0, 0.26);
+  --scroll-minimap-glass-text: rgba(246, 247, 248, 0.90);
+  --scroll-minimap-glass-muted: rgba(232, 235, 237, 0.66);
+  --scroll-minimap-glass-hover: rgba(255, 255, 255, 0.10);
   --shadow-soft: 0 22px 58px rgba(0, 0, 0, 0.32);
   --app-chrome-bg: #0d0e0f;
   --agent-gutter: #101113;
@@ -186,8 +334,13 @@ select {
 .app-shell.is-agent-active {
   padding: var(--agent-shell-gap);
   border-radius: var(--agent-window-radius);
-  background: var(--app-chrome-bg);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 62%, transparent);
+  background:
+    var(--ambient-warm),
+    var(--ambient-cool),
+    var(--app-chrome-bg);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--line) 62%, transparent),
+    var(--shadow-elevation-1);
   isolation: isolate;
 }
 
@@ -683,6 +836,7 @@ select {
   min-height: 52px;
   gap: 6px;
   padding: 8px 10px;
+  position: relative;
 }
 
 .workbench-context-item span {
@@ -1035,7 +1189,6 @@ select {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  border-radius: var(--agent-panel-radius);
   background: var(--panel);
 }
 
@@ -1060,24 +1213,28 @@ select {
 /* ===== Content Row ===== */
 
 .agent-content-row {
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
 
+.agent-content-row.has-right-panel {
+  grid-template-columns: minmax(0, 1fr) 6px var(--agent-right-panel-width);
+}
+
 .agent-content-row > .agent-main {
-  flex: 1 1 0;
-  min-width: 360px;
+  min-width: 0;
 }
 
 /* ===== Right Panel ===== */
 
 .agent-right-resize {
+  position: relative;
+  z-index: 2;
   width: 6px;
   cursor: col-resize;
-  flex-shrink: 0;
   align-self: stretch;
   background: transparent;
   transition: background 0.15s ease;
@@ -1088,7 +1245,8 @@ select {
 }
 
 .agent-right-panel {
-  flex-shrink: 0;
+  width: var(--agent-right-panel-width);
+  min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1235,6 +1393,203 @@ select {
   height: 100%;
   min-height: 0;
 }
+
+/* Git changes tab */
+.agent-right-panel-changes {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.agent-right-panel-git-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.agent-right-panel-commit-form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.agent-right-panel-commit-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  outline: none;
+}
+
+.agent-right-panel-commit-input:focus {
+  border-color: var(--accent);
+}
+
+.git-branch-name {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.git-status-badge {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.git-status-badge.is-dirty {
+  background: var(--warning) / 0.15;
+  color: var(--warning);
+}
+
+.git-status-badge.is-clean {
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  color: var(--success);
+}
+
+.agent-right-panel-empty {
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.git-change-dir {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.git-change-dir:hover {
+  background: var(--hover);
+}
+
+.git-change-section-header {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+}
+
+.git-change-file {
+  display: flex;
+  align-items: center;
+  min-height: 0;
+}
+
+.git-change-file-main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 5px 12px 5px 18px;
+  font-size: 13px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.git-change-file-main:hover {
+  background: var(--hover);
+}
+
+.git-revert-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.git-revert-btn:hover {
+  background: var(--hover);
+  color: var(--danger);
+}
+
+
+/* Git commit bar */
+.git-commit-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.git-commit-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  outline: none;
+}
+
+.git-commit-input:focus {
+  border-color: var(--accent);
+}
+
+.git-commit-confirm,
+.git-commit-cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.git-commit-confirm:hover {
+  background: var(--hover);
+  color: var(--success);
+}
+
+.git-commit-confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.git-commit-cancel:hover {
+  background: var(--hover);
+  color: var(--danger);
+}
+
 
 /* ===== Resize Handle ===== */
 
@@ -1288,24 +1643,28 @@ select {
 /* ===== Content Row ===== */
 
 .agent-content-row {
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
 
+.agent-content-row.has-right-panel {
+  grid-template-columns: minmax(0, 1fr) 6px var(--agent-right-panel-width);
+}
+
 .agent-content-row > .agent-main {
-  flex: 1 1 0;
-  min-width: 360px;
+  min-width: 0;
 }
 
 /* ===== Right Panel ===== */
 
 .agent-right-resize {
+  position: relative;
+  z-index: 2;
   width: 6px;
   cursor: col-resize;
-  flex-shrink: 0;
   align-self: stretch;
   background: transparent;
   transition: background 0.15s ease;
@@ -1316,7 +1675,8 @@ select {
 }
 
 .agent-right-panel {
-  flex-shrink: 0;
+  width: var(--agent-right-panel-width);
+  min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1462,6 +1822,203 @@ select {
 .agent-right-panel-preview {
   height: 100%;
   min-height: 0;
+}
+
+/* Git changes tab */
+.agent-right-panel-changes {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.agent-right-panel-git-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.agent-right-panel-commit-form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.agent-right-panel-commit-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  outline: none;
+}
+
+.agent-right-panel-commit-input:focus {
+  border-color: var(--accent);
+}
+
+.git-branch-name {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.git-status-badge {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.git-status-badge.is-dirty {
+  background: var(--warning) / 0.15;
+  color: var(--warning);
+}
+
+.git-status-badge.is-clean {
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  color: var(--success);
+}
+
+.agent-right-panel-empty {
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.git-change-dir {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.git-change-dir:hover {
+  background: var(--hover);
+}
+
+.git-change-section-header {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+}
+
+.git-change-file {
+  display: flex;
+  align-items: center;
+  min-height: 0;
+}
+
+.git-change-file-main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 5px 12px 5px 18px;
+  font-size: 13px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.git-change-file-main:hover {
+  background: var(--hover);
+}
+
+.git-revert-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.git-revert-btn:hover {
+  background: var(--hover);
+  color: var(--danger);
+}
+
+
+
+/* Git commit bar */
+.git-commit-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.git-commit-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  outline: none;
+}
+
+.git-commit-input:focus {
+  border-color: var(--accent);
+}
+
+.git-commit-confirm,
+.git-commit-cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.git-commit-confirm:hover {
+  background: var(--hover);
+  color: var(--success);
+}
+
+.git-commit-confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.git-commit-cancel:hover {
+  background: var(--hover);
+  color: var(--danger);
 }
 
 /* ===== Resize Handle ===== */
@@ -1564,25 +2121,41 @@ select {
   border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
   border-radius: var(--agent-panel-radius);
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--side) 96%, var(--panel)) 0%, var(--side) 100%);
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-glass-strong) 94%, var(--panel)) 0%, var(--surface-glass) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.7) inset,
-    0 18px 42px rgba(24, 24, 22, 0.06);
+    var(--rim-highlight),
+    var(--shadow-elevation-2);
   padding: calc(var(--window-control-height) + 4px) 12px 14px;
 }
 
-.agent-side-control.shadcn-button {
-  width: 32px;
-  height: 32px;
-  color: var(--muted);
+.agent-header-action.shadcn-button {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-color: color-mix(in srgb, var(--line) 46%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel-soft) 42%, transparent);
+  color: color-mix(in srgb, var(--muted) 90%, var(--text));
+  box-shadow: none;
 }
 
-.agent-side-control.shadcn-button:hover,
-.agent-side-control.shadcn-button:focus-visible,
-.agent-side-control.shadcn-button.is-collapsed {
-  border-color: color-mix(in srgb, var(--accent) 12%, var(--line));
-  background: color-mix(in srgb, var(--side-hover) 82%, var(--panel));
+.agent-header-action.shadcn-button:hover,
+.agent-header-action.shadcn-button:focus-visible {
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+  background: color-mix(in srgb, var(--panel-soft) 58%, transparent);
   color: var(--text);
+}
+
+.agent-header-action.shadcn-button.is-active,
+.agent-header-action.shadcn-button.is-collapsed {
+  border-color: color-mix(in srgb, var(--line) 78%, transparent);
+  background: color-mix(in srgb, var(--panel-soft) 74%, var(--panel));
+  color: var(--text);
+  box-shadow:
+    var(--rim-highlight),
+    0 8px 18px color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .agent-main {
@@ -1599,8 +2172,8 @@ select {
     linear-gradient(180deg, color-mix(in srgb, var(--panel) 68%, transparent) 0%, transparent 34%),
     var(--panel);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.82) inset,
-    0 18px 46px rgba(24, 24, 22, 0.05);
+    var(--rim-highlight),
+    var(--shadow-elevation-2);
 }
 
 .agent-main::before,
@@ -1615,18 +2188,21 @@ select {
   inset: 0;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 56%, transparent) 0%, transparent 28%),
-    linear-gradient(0deg, color-mix(in srgb, var(--panel-soft) 34%, transparent) 0%, transparent 30%);
-  opacity: 0.42;
+    linear-gradient(0deg, color-mix(in srgb, var(--panel-soft) 34%, transparent) 0%, transparent 30%),
+    var(--vignette);
+  opacity: 0.70;
 }
 
 .agent-main::after {
   inset: 0;
   background-image:
     linear-gradient(color-mix(in srgb, var(--line) 34%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--line) 28%, transparent) 1px, transparent 1px);
-  background-position: center top;
-  background-size: 36px 36px;
-  opacity: 0.05;
+    linear-gradient(90deg, color-mix(in srgb, var(--line) 28%, transparent) 1px, transparent 1px),
+    var(--noise-texture);
+  background-position: center top, center top, center;
+  background-size: 36px 36px, 36px 36px, 256px 256px;
+  background-repeat: repeat, repeat, repeat;
+  opacity: 0.12;
   mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 72%, transparent 100%);
 }
 
@@ -1644,24 +2220,26 @@ select {
   :root:not([data-theme]) .agent-main::before {
     background:
       linear-gradient(180deg, color-mix(in srgb, var(--panel) 42%, transparent) 0%, transparent 32%),
-      linear-gradient(0deg, color-mix(in srgb, var(--panel-soft) 24%, transparent) 0%, transparent 34%);
-    opacity: 0.56;
+      linear-gradient(0deg, color-mix(in srgb, var(--panel-soft) 24%, transparent) 0%, transparent 34%),
+      var(--vignette);
+    opacity: 0.70;
   }
 
   :root:not([data-theme]) .agent-main::after {
-    opacity: 0.12;
+    opacity: 0.16;
   }
 }
 
 :root[data-theme="dark"] .agent-main::before {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--panel) 42%, transparent) 0%, transparent 32%),
-    linear-gradient(0deg, color-mix(in srgb, var(--panel-soft) 24%, transparent) 0%, transparent 34%);
-  opacity: 0.56;
+    linear-gradient(0deg, color-mix(in srgb, var(--panel-soft) 24%, transparent) 0%, transparent 34%),
+    var(--vignette);
+  opacity: 0.70;
 }
 
 :root[data-theme="dark"] .agent-main::after {
-  opacity: 0.12;
+  opacity: 0.16;
 }
 
 .agent-status-strip {
@@ -1670,12 +2248,25 @@ select {
   justify-content: flex-start;
   gap: 14px;
   min-width: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--panel-soft) 72%, var(--panel)) 0%, color-mix(in srgb, var(--panel) 88%, var(--panel-soft)) 100%);
+    linear-gradient(180deg, var(--surface-glass-strong) 0%, var(--surface-glass) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: var(--rim-highlight);
   padding: 10px 16px 11px;
   border-radius: var(--agent-panel-radius) var(--agent-panel-radius) 0 0;
   -webkit-app-region: drag;
+}
+
+.agent-status-strip::after {
+  content: "";
+  position: absolute;
+  right: 32px;
+  bottom: 0;
+  left: 32px;
+  height: 1px;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--line) 64%, transparent);
 }
 
 .agent-status-actions,
@@ -1741,8 +2332,10 @@ select {
 
 .agent-status-actions {
   flex: 0 0 auto;
+  gap: 8px;
   margin-left: auto;
   justify-content: flex-end;
+  padding: 0 2px;
 }
 
 
@@ -2391,28 +2984,30 @@ select {
   color: var(--text);
   font: inherit;
   padding: 0;
-  transition: background 0.12s ease;
+  transition: background 0.12s ease, transform 0.16s ease, box-shadow 0.16s ease;
   -webkit-app-region: no-drag;
 }
 
 .codex-session-row:hover {
   background: var(--side-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-elevation-1);
 }
 
 .codex-session-main {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   min-width: 0;
   flex: 1 1 auto;
-  gap: 8px;
+  gap: 10px;
   border: none;
   background: transparent;
   color: inherit;
   cursor: pointer;
   font: inherit;
   padding: 8px 10px;
-  text-align: left;
+  position: relative;
+
 }
 
 .codex-session-title {
@@ -2426,13 +3021,23 @@ select {
 }
 
 .codex-session-meta {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
-  flex: 0 0 auto;
   color: var(--muted);
   font-size: 11.5px;
   white-space: nowrap;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
 }
+
+.codex-session-row:hover .codex-session-meta {
+  opacity: 0;
+}
+
 
 .codex-session-row.is-active {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
@@ -2538,13 +3143,15 @@ select {
   font-size: 13px;
   padding: 8px 8px;
   text-align: left;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.16s ease, box-shadow 0.16s ease;
   -webkit-app-region: no-drag;
 }
 
 .codex-workspace-row:hover {
   background: var(--side-hover);
   color: var(--text);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-elevation-1);
 }
 
 .codex-workspace-row span {
@@ -3866,7 +4473,8 @@ pre:last-child {
 
 .md-th {
   padding: 8px 10px;
-  border-bottom: 1px solid var(--line);
+  position: relative;
+
   color: var(--muted);
   font-weight: var(--font-weight-ui);
   font-size: 12px;
@@ -4220,90 +4828,106 @@ pre:last-child {
 /*  Scroll minimap                                                    */
 /* ================================================================ */
 
-.scroll-minimap-panel mark {
-  background: var(--primary) / 0.2;
-  color: var(--primary);
-  border-radius: 2px;
-  padding: 0 1px;
-}
-
-/* ================================================================ */
-
-/* ================================================================ */
-/*  Reasoning collapsible                                             */
-/* ================================================================ */
-
-.reasoning {
-  margin: 4px 0;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel-soft);
+.scroll-minimap-panel {
+  position: absolute;
+  isolation: isolate;
   overflow: hidden;
+  border: 1px solid var(--scroll-minimap-glass-border);
+  border-radius: 22px;
+  background: var(--scroll-minimap-glass-bg);
+  color: var(--scroll-minimap-glass-text);
+  backdrop-filter: blur(26px) saturate(150%) contrast(104%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%) contrast(104%);
+  box-shadow:
+    0 24px 64px var(--scroll-minimap-glass-shadow),
+    0 2px 8px rgba(255, 255, 255, 0.10) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.13) inset;
 }
 
-.reasoning-trigger {
-  width: 100%;
-  border: none;
+.scroll-minimap-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 42%),
+    radial-gradient(circle at 86% 100%, rgba(255, 255, 255, 0.10), transparent 38%);
+  box-shadow: inset 0 1px 0 var(--scroll-minimap-glass-inner);
+}
+
+.scroll-minimap-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.scroll-minimap-panel-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.scroll-minimap-panel-icon,
+.scroll-minimap-panel-count,
+.scroll-minimap-panel-empty,
+.scroll-minimap-panel-preview {
+  color: var(--scroll-minimap-glass-muted);
+}
+
+.scroll-minimap-panel-search {
+  color: var(--scroll-minimap-glass-text);
+}
+
+.scroll-minimap-panel-search::placeholder {
+  color: color-mix(in srgb, var(--scroll-minimap-glass-muted) 72%, transparent);
+}
+
+.scroll-minimap-panel-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
   background: transparent;
+  color: var(--scroll-minimap-glass-muted);
   cursor: pointer;
 }
 
-/* ================================================================ */
-/*  Sticky user message                                               */
-/* ================================================================ */
-
-.sticky-user-message {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+.scroll-minimap-panel-clear:hover,
+.scroll-minimap-panel-clear:focus-visible {
+  color: var(--scroll-minimap-glass-text);
 }
 
-/* ================================================================ */
-/*  Scroll minimap                                                    */
-/* ================================================================ */
-
-.scroll-minimap-panel mark {
-  background: var(--primary) / 0.2;
-  color: var(--primary);
-  border-radius: 2px;
-  padding: 0 1px;
-}
-
-/* ================================================================ */
-
-/* ================================================================ */
-/*  Reasoning collapsible                                             */
-/* ================================================================ */
-
-.reasoning {
-  margin: 4px 0;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel-soft);
-  overflow: hidden;
-}
-
-.reasoning-trigger {
-  width: 100%;
-  border: none;
+.scroll-minimap-panel-item {
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.13);
   background: transparent;
+  color: inherit;
   cursor: pointer;
 }
 
-/* ================================================================ */
-/*  Sticky user message                                               */
-/* ================================================================ */
-
-.sticky-user-message {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+.scroll-minimap-panel-item:hover,
+.scroll-minimap-panel-item:focus-visible {
+  background: var(--scroll-minimap-glass-hover);
+  outline: none;
 }
 
-/* ================================================================ */
-/*  Scroll minimap                                                    */
-/* ================================================================ */
+.scroll-minimap-panel-item.is-user {
+  box-shadow: inset 2px 0 0 rgba(255, 255, 255, 0.34);
+}
+
+.scroll-minimap-panel-role {
+  color: var(--scroll-minimap-glass-muted);
+  letter-spacing: 0;
+}
+
+.scroll-minimap-panel-role.is-user {
+  color: var(--scroll-minimap-glass-text);
+}
 
 .scroll-minimap-panel mark {
-  background: var(--primary) / 0.2;
-  color: var(--primary);
-  border-radius: 2px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.20);
+  color: var(--scroll-minimap-glass-text);
   padding: 0 1px;
 }
 
@@ -4667,16 +5291,19 @@ pre:last-child {
   color: var(--panel);
   padding: 6px 8px;
   font-size: 12px;
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--shadow-elevation-1);
 }
 
 .shadcn-dropdown-content {
   min-width: 190px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--panel);
+  background:
+    linear-gradient(180deg, var(--surface-glass-strong) 0%, var(--surface-glass) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   color: var(--text);
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--shadow-elevation-2);
   padding: 6px;
 }
 
@@ -4882,7 +5509,8 @@ pre:last-child {
   cursor: pointer;
   font: inherit;
   padding: 8px 10px;
-  text-align: left;
+  position: relative;
+
   transition:
     background 0.16s ease,
     border-color 0.16s ease,
@@ -4894,6 +5522,8 @@ pre:last-child {
 .agent-sidebar-collapsed-entry:focus-visible {
   background: var(--side-hover);
   color: var(--text);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-elevation-1);
   outline: none;
 }
 
@@ -4962,10 +5592,11 @@ pre:last-child {
   inset: -52px -68px -28px;
   border-radius: 34px;
   background:
+    radial-gradient(ellipse 480px 320px at 50% 10%, color-mix(in srgb, var(--accent-warm) 14%, transparent) 0%, transparent 70%),
     linear-gradient(180deg, color-mix(in srgb, var(--panel) 54%, transparent) 0%, transparent 58%),
     linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--line) 24%, transparent) 50%, transparent 100%);
   mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 84%, transparent 100%);
-  opacity: 0.72;
+  opacity: 0.84;
 }
 
 .agent-empty-state-icon {
@@ -4978,10 +5609,12 @@ pre:last-child {
   border: 1px solid var(--line);
   border-radius: 14px;
   background:
-    linear-gradient(145deg, color-mix(in srgb, var(--panel) 96%, transparent), color-mix(in srgb, var(--panel-soft) 88%, transparent)),
+    linear-gradient(145deg, var(--surface-glass-strong), var(--surface-glass)),
     var(--surface-raised);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   color: var(--text);
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--shadow-elevation-2);
 }
 
 .agent-empty-state-icon::before {
@@ -5026,9 +5659,9 @@ pre:last-child {
 .agent-empty-state-actions .shadcn-button {
   background: color-mix(in srgb, var(--surface-glass) 84%, var(--panel));
   box-shadow:
-    0 10px 28px rgba(24, 24, 22, 0.07),
-    0 1px 0 rgba(255, 255, 255, 0.72) inset;
-  backdrop-filter: blur(14px);
+    var(--shadow-elevation-2),
+    var(--rim-highlight);
+  backdrop-filter: blur(16px);
   transform: translateY(0);
   transition:
     border-color 0.16s ease,
@@ -5070,9 +5703,10 @@ pre:last-child {
 
 :root[data-theme="dark"] .agent-empty-state::before {
   background:
+    radial-gradient(ellipse 480px 320px at 50% 10%, color-mix(in srgb, var(--accent-warm) 14%, transparent) 0%, transparent 70%),
     linear-gradient(180deg, color-mix(in srgb, var(--panel) 42%, transparent) 0%, transparent 58%),
     linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--line) 20%, transparent) 50%, transparent 100%);
-  opacity: 0.58;
+  opacity: 0.64;
 }
 
 :root[data-theme="dark"] .agent-empty-state-icon::before {
@@ -5082,9 +5716,10 @@ pre:last-child {
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) .agent-empty-state::before {
     background:
+      radial-gradient(ellipse 480px 320px at 50% 10%, color-mix(in srgb, var(--accent-warm) 14%, transparent) 0%, transparent 70%),
       linear-gradient(180deg, color-mix(in srgb, var(--panel) 42%, transparent) 0%, transparent 58%),
       linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--line) 20%, transparent) 50%, transparent 100%);
-    opacity: 0.58;
+    opacity: 0.64;
   }
 
   :root:not([data-theme]) .agent-empty-state-icon::before {
@@ -6278,7 +6913,8 @@ pre:last-child {
   background: transparent;
   color: var(--text);
   padding: 8px 10px;
-  text-align: left;
+  position: relative;
+
   cursor: pointer;
 }
 
@@ -6908,6 +7544,26 @@ pre:last-child {
 .preview-file-line:hover {
   background: color-mix(in srgb, var(--side-hover) 50%, transparent);
 }
+
+/* Image preview */
+.preview-image-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 16px;
+  background: repeating-conic-gradient(rgba(128, 128, 128, 0.08) 0% 25%, transparent 0% 50%) 50% / 20px 20px;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
 
 /* Diff Unified View */
 .preview-diff-unified,

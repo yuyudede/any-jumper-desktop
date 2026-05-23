@@ -7,6 +7,7 @@ export interface PreviewFile {
   path: string;
   content: string;
   language?: string;
+  isImage?: boolean;
 }
 
 export interface PreviewDiff {
@@ -254,6 +255,26 @@ function FilePreview({ file }: { file: PreviewFile }) {
 
   const lines = useMemo(() => file.content.split("\n"), [file.content]);
   const lang = file.language || getLanguageFromPath(file.path);
+
+  // Image preview
+  if (file.isImage) {
+    return (
+      <div className="preview-file-content">
+        <div className="preview-file-header">
+          <FileCode size={14} />
+          <span className="preview-file-path">{file.path}</span>
+          <span className="preview-file-lang">image</span>
+        </div>
+        <div className="preview-image-container">
+          <img
+            src={file.content}
+            alt={file.path}
+            className="preview-image"
+          />
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     let cancelled = false;
