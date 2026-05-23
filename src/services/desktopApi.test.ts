@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { errorDetail, errorMessage } from "./desktopApi";
+
+function readDesktopApiSource() {
+  return readFileSync(resolve(process.cwd(), "src/services/desktopApi.ts"), "utf8");
+}
 
 describe("desktopApi error helpers", () => {
   it("reads message and detail from Electron IPC style errors", () => {
@@ -14,5 +20,12 @@ describe("desktopApi error helpers", () => {
     };
     expect(errorMessage(error)).toBe("缺少 API Key");
     expect(errorDetail(error)).toBe("provider=foo");
+  });
+
+  it("exposes a renderer API for smart git commit message generation", () => {
+    const source = readDesktopApiSource();
+
+    expect(source).toContain("gitGenerateCommitMessage(rootPath: string)");
+    expect(source).toContain('invoke<string>("git_generate_commit_message", { rootPath })');
   });
 });

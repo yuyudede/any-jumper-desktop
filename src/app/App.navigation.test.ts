@@ -90,14 +90,12 @@ describe("App navigation shell", () => {
     expect(dotBlock).toContain("box-shadow: none;");
   });
 
-  it("keeps the agent sidebar and terminal toggles outside the macOS window controls", () => {
+  it("keeps the agent side controls outside the macOS window controls", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
     const css = readProjectFile("src/styles/theme.css");
     const headerActionsIndex = source.indexOf('className="agent-status-actions"');
     const sidebarToggleIndex = source.indexOf("agent-sidebar-toggle agent-side-control");
     const terminalToggleIndex = source.indexOf("agent-terminal-toggle agent-side-control");
-    const themeToggleIndex = source.indexOf("agent-theme-toggle");
-    const composerActionsIndex = source.indexOf('className="composer-left-actions"');
 
     expect(source).toContain("PanelLeftOpen");
     expect(source).toContain("PanelLeftClose");
@@ -114,8 +112,9 @@ describe("App navigation shell", () => {
     expect(terminalToggleIndex).toBeGreaterThan(sidebarToggleIndex);
     const rightPanelToggleIndex = source.indexOf("agent-right-panel-toggle agent-side-control");
     expect(rightPanelToggleIndex).toBeGreaterThan(terminalToggleIndex);
-    expect(themeToggleIndex).toBeGreaterThan(rightPanelToggleIndex);
-    expect(themeToggleIndex).toBeLessThan(composerActionsIndex);
+    expect(source).not.toContain("agent-theme-toggle");
+    expect(source).toContain("agent-sidebar-theme-toggle");
+    expect(source).toContain("agent-corner-theme-toggle");
     expect(css).toContain("--window-control-safe-width");
     expect(css).toContain("padding-left: calc(var(--window-control-safe-width) + 12px);");
     expect(css).not.toContain(".agent-topbar");
@@ -154,6 +153,43 @@ describe("App navigation shell", () => {
     expect(css).toContain(".codex-project-sessions");
     expect(css).toContain(".codex-session-row.is-nested");
     expect(css).toContain(".codex-session-action");
+  });
+
+  it("keeps the current workspace path copy affordance at the bottom of the sidebar", () => {
+    const source = readProjectFile("src/pages/AgentPage.tsx");
+    const css = readProjectFile("src/styles/theme.css");
+
+    expect(source).toContain('className="agent-sidebar-foot"');
+    expect(source).toContain("Current Path");
+    expect(source).toContain("MapPin");
+    expect(source).toContain("<MapPin size={14} /> Current Path");
+    expect(source).not.toContain("<Info size={14} /> Current Path");
+    expect(source).toContain("title={activeWorkspace.rootPath}");
+    expect(source).toContain("navigator.clipboard.writeText(activeWorkspace.rootPath)");
+    expect(source).toContain('aria-label={copiedPath ? "已复制" : "复制路径"}');
+    expect(css).toContain(".agent-sidebar-foot");
+    expect(css).toContain("margin-top: auto;");
+    expect(css).toContain(".agent-sidebar-foot-copy");
+  });
+
+  it("keeps session titles on one line and swaps time for actions on hover", () => {
+    const source = readProjectFile("src/pages/AgentPage.tsx");
+    const css = readProjectFile("src/styles/theme.css");
+    const titleTextBlock = css.match(/\.codex-session-title-text\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const actionRailBlock = css.match(/\.codex-session-actions\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const actionHoverBlock = css.match(/\.codex-session-row:hover \.codex-session-actions,\s*\n\.codex-session-row:focus-within \.codex-session-actions\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+
+    expect(source).toContain('className="codex-session-title-text"');
+    expect(source).toContain('className="codex-session-actions"');
+    expect(source).toContain("title={thread.title}");
+    expect(titleTextBlock).toContain("overflow: hidden;");
+    expect(titleTextBlock).toContain("text-overflow: ellipsis;");
+    expect(titleTextBlock).toContain("white-space: nowrap;");
+    expect(actionRailBlock).toContain("opacity: 0;");
+    expect(actionRailBlock).toContain("pointer-events: none;");
+    expect(css).toContain(".codex-session-row:hover .codex-session-meta,\n.codex-session-row:focus-within .codex-session-meta");
+    expect(actionHoverBlock).toContain("opacity: 1;");
+    expect(actionHoverBlock).toContain("pointer-events: auto;");
   });
 
   it("loads session rows for workspaces restored as expanded", () => {

@@ -1,6 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import {
-  PanelRightClose,
   RefreshCw,
   FolderOpen,
   GitBranch,
@@ -9,6 +8,8 @@ import {
   FileText,
   ChevronDown,
   ArrowUp,
+  Plus,
+  WandSparkles,
 } from "lucide-react";
 import { FileBrowser, type FileTreeNode } from "./FileBrowser";
 import { PreviewPanel, type PreviewFile, type PreviewDiff } from "./PreviewPanel";
@@ -22,7 +23,7 @@ interface RightPanelProps {
   rootPath: string;
   width: number;
   resizing?: boolean;
-  onClose: () => void;
+  externalPreviewFile?: PreviewFile | null;
   onOpenFiles?: (files: PreviewFile[]) => void;
 }
 
@@ -50,14 +51,14 @@ function isImageFile(path: string): boolean {
   return IMAGE_EXTENSIONS.has(ext);
 }
 
-export function RightPanel({ rootPath, width, resizing = false, onClose }: RightPanelProps) {
-  const [activeTab, setActiveTab] = useState<RightPanelTab>("files");
+export function RightPanel({ rootPath, width, resizing = false, externalPreviewFile }: RightPanelProps) {
+  const [activeTab, setActiveTab] = useState<RightPanelTab>(() => externalPreviewFile ? "preview" : "files");
   const [roots, setRoots] = useState<FileTreeNode[]>([]);
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setError] = useState<string | null>(null);
 
   // Preview state
-  const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
+  const [previewFile, setPreviewFile] = useState<PreviewFile | null>(() => externalPreviewFile ?? null);
   const [previewDiff, setPreviewDiff] = useState<PreviewDiff | null>(null);
 
   // Git state
@@ -65,6 +66,7 @@ export function RightPanel({ rootPath, width, resizing = false, onClose }: Right
   const [diffLoading, setDiffLoading] = useState(false);
   const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set());
   const [commitLoading, setCommitLoading] = useState(false);
+  const [commitMessageLoading, setCommitMessageLoading] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [draftMessage, setDraftMessage] = useState<string | null>(null);
 
@@ -85,6 +87,13 @@ export function RightPanel({ rootPath, width, resizing = false, onClose }: Right
   useEffect(() => {
     if (rootPath) loadRoot();
   }, [loadRoot]);
+
+  useEffect(() => {
+    if (!externalPreviewFile) return;
+    setPreviewFile(externalPreviewFile);
+    setPreviewDiff(null);
+    setActiveTab("preview");
+  }, [externalPreviewFile]);
 
   const handleExpand = useCallback(async (node: FileTreeNode) => {
     if (node.type !== "directory") return [];
@@ -188,12 +197,28 @@ export function RightPanel({ rootPath, width, resizing = false, onClose }: Right
     [git],
   );
 
+  const handleStageFile = useCallback(
+    async (filePath: string) => {
+      try {
+        await desktopApi.gitStage(rootPath, [filePath]);
+        await git.refresh();
+      } catch (err) {
+        window.alert(`暂存失败：${err instanceof Error ? err.message : "未知错误"}`);
+      }
+    },
+    [rootPath, git],
+  );
+
   const handleCommit = useCallback(async (message: string) => {
     if (!message.trim()) return;
     setCommitLoading(true);
     setDraftMessage(null);
     try {
-      await desktopApi.gitStage(rootPath, git.changedFiles.filter((f) => f.worktreeStatus !== "D").map((f) => f.path));
+      const committablePaths = [
+        ...git.changedFiles.filter((f) => f.worktreeStatus !== "D").map((f) => f.path),
+        ...git.untrackedFiles.map((f) => f.path),
+      ];
+      await desktopApi.gitStage(rootPath, committablePaths);
       await desktopApi.gitCommit(rootPath, message.trim());
       await git.refresh();
     } catch (err) {
@@ -202,6 +227,19 @@ export function RightPanel({ rootPath, width, resizing = false, onClose }: Right
       setCommitLoading(false);
     }
   }, [rootPath, git]);
+
+  const handleGenerateCommitMessage = useCallback(async () => {
+    setDraftMessage("");
+    setCommitMessageLoading(true);
+    try {
+      const message = await desktopApi.gitGenerateCommitMessage(rootPath);
+      setDraftMessage(message);
+    } catch (err) {
+      window.alert(`生成失败：${err instanceof Error ? err.message : "未知错误"}`);
+    } finally {
+      setCommitMessageLoading(false);
+    }
+  }, [rootPath]);
 
   const handlePush = useCallback(async () => {
     setPushLoading(true);
@@ -302,15 +340,6 @@ export function RightPanel({ rootPath, width, resizing = false, onClose }: Right
             预览
           </button>
         </div>
-        <button
-          type="button"
-          className="agent-right-panel-close"
-          onClick={onClose}
-          title="折叠面板"
-          aria-label="折叠面板"
-        >
-          <PanelRightClose size={16} />
-        </button>
       </div>
 
       {/* Tab Content */}
@@ -369,16 +398,28 @@ export function RightPanel({ rootPath, width, resizing = false, onClose }: Right
                 </span>
                 <div className="ml-auto flex items-center gap-1">
                   {git.status.dirty && draftMessage === null && (
-                    <button
-                      type="button"
-                      className="agent-right-panel-toolbar-btn"
-                      onClick={() => setDraftMessage("")}
-                      disabled={commitLoading}
-                      title="暂存全部变更并提交"
-                      aria-label="提交 Git Commit"
-                    >
-                      <GitCommit size={13} />
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="agent-right-panel-toolbar-btn"
+                        onClick={handleGenerateCommitMessage}
+                        disabled={commitMessageLoading || commitLoading}
+                        title="智能生成 Commit Message"
+                        aria-label="智能生成 Commit Message"
+                      >
+                        <WandSparkles size={13} className={commitMessageLoading ? "is-spinning" : ""} />
+                      </button>
+                      <button
+                        type="button"
+                        className="agent-right-panel-toolbar-btn"
+                        onClick={() => setDraftMessage("")}
+                        disabled={commitLoading}
+                        title="暂存全部变更并提交"
+                        aria-label="提交 Git Commit"
+                      >
+                        <GitCommit size={13} />
+                      </button>
+                    </>
                   )}
                   <button
                     type="button"
@@ -413,7 +454,7 @@ export function RightPanel({ rootPath, width, resizing = false, onClose }: Right
                 <input
                   type="text"
                   className="agent-right-panel-commit-input"
-                  placeholder="输入 commit message，按 Enter 提交"
+                  placeholder={commitMessageLoading ? "正在生成 commit message..." : "输入 commit message，按 Enter 提交"}
                   value={draftMessage}
                   onChange={(e) => setDraftMessage(e.target.value)}
                   onKeyDown={(e) => {
@@ -426,6 +467,16 @@ export function RightPanel({ rootPath, width, resizing = false, onClose }: Right
                   autoFocus
                   disabled={commitLoading}
                 />
+                <button
+                  type="button"
+                  className="agent-right-panel-toolbar-btn"
+                  onClick={handleGenerateCommitMessage}
+                  disabled={commitMessageLoading || commitLoading}
+                  title="智能生成 Commit Message"
+                  aria-label="智能生成 Commit Message"
+                >
+                  <WandSparkles size={13} className={commitMessageLoading ? "is-spinning" : ""} />
+                </button>
                 <button
                   type="button"
                   className="agent-right-panel-toolbar-btn"
@@ -546,7 +597,7 @@ export function RightPanel({ rootPath, width, resizing = false, onClose }: Right
                   未追踪文件
                 </div>
                 {git.untrackedFiles.map((file) => (
-                  <div key={file.path} className="git-change-file">
+                  <div key={file.path} className="git-change-file group">
                     <button
                       type="button"
                       className="git-change-file-main"
@@ -564,6 +615,16 @@ export function RightPanel({ rootPath, width, resizing = false, onClose }: Right
                           {file.path.split("/").slice(0, -1).join("/")}
                         </span>
                       )}
+                    </button>
+                    <button
+                      type="button"
+                      className="git-change-file-action git-stage-btn"
+                      onClick={() => handleStageFile(file.path)}
+                      disabled={git.loading}
+                      title="暂存文件"
+                      aria-label={`暂存 ${file.path}`}
+                    >
+                      <Plus size={13} />
                     </button>
                   </div>
                 ))}

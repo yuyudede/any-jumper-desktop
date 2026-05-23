@@ -18,4 +18,33 @@ describe("AgentPage Git diff experience", () => {
     expect(source).not.toContain("desktopApi.gitStatus");
     expect(source).not.toContain('gitDiff ? <pre className="code-block">{gitDiff}</pre>');
   });
+
+  it("lets untracked files be staged from the changes panel", () => {
+    const source = readProjectFile("src/components/RightPanel.tsx");
+
+    expect(source).toContain("Plus");
+    expect(source).toContain("handleStageFile");
+    expect(source).toContain('title="暂存文件"');
+    expect(source).toContain('aria-label={`暂存 ${file.path}`}');
+  });
+
+  it("includes untracked files when committing all visible changes", () => {
+    const source = readProjectFile("src/components/RightPanel.tsx");
+
+    expect(source).toContain("const committablePaths = [");
+    expect(source).toContain("...git.changedFiles");
+    expect(source).toContain("...git.untrackedFiles");
+    expect(source).toContain("await desktopApi.gitStage(rootPath, committablePaths);");
+  });
+
+  it("can generate a commit message from the changes panel", () => {
+    const source = readProjectFile("src/components/RightPanel.tsx");
+
+    expect(source).toContain("WandSparkles");
+    expect(source).toContain("commitMessageLoading");
+    expect(source).toContain("handleGenerateCommitMessage");
+    expect(source).toContain("desktopApi.gitGenerateCommitMessage(rootPath)");
+    expect(source).toContain('title="智能生成 Commit Message"');
+    expect(source).toContain('aria-label="智能生成 Commit Message"');
+  });
 });

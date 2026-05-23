@@ -2529,6 +2529,164 @@ function gitCommit(root: string, message: string, reporter?: ToolTraceReporter) 
   return gitRun(root, ["commit", "-m", message.trim()], reporter);
 }
 
+interface GitCommitMessageContext {
+  status: GitStatus;
+  stagedDiff: string;
+  unstagedDiff: string;
+  untrackedSummaries: string[];
+}
+
+async function generateGitCommitMessage(root: string) {
+  const context = buildGitCommitMessageContext(root);
+  if (context.status.entries.length === 0) {
+    throw new AppError("GIT_ERROR", "当前没有可生成 commit message 的变更");
+  }
+
+  const fallback = fallbackCommitMessage(context);
+  const selection = selectCommitMessageModel(root);
+  if (!selection) return fallback;
+
+  try {
+    const model = createChatModel(selection.config, selection.model);
+    const output = await model.invoke([
+      new SystemMessage({
+        content: "你负责生成简洁的中文 Conventional Commit message。只返回一行 commit message，不要引号、Markdown 或解释。",
+      }),
+      new HumanMessage({
+        content: buildCommitMessagePrompt(context),
+      }),
+    ]);
+    return sanitizeGeneratedCommitMessage(extractFinalContent(output)) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function buildGitCommitMessageContext(root: string): GitCommitMessageContext {
+  const status = gitStatus(root);
+  const stagedDiff = gitDiff(root, true);
+  const unstagedDiff = gitDiff(root, false);
+  const untrackedSummaries = summarizeUntrackedFiles(root, status.entries.filter((entry) => entry.indexStatus === "?" || entry.worktreeStatus === "?"));
+  return { status, stagedDiff, unstagedDiff, untrackedSummaries };
+}
+
+function summarizeUntrackedFiles(root: string, entries: GitStatus["entries"]) {
+  return entries.slice(0, 6).map((entry) => {
+    const target = resolvePath(root, entry.path);
+    if (!inside(root, target) || !existsSync(target)) return `${entry.path}: unavailable`;
+    const stat = statSync(target);
+    if (stat.isDirectory()) return `${entry.path}: directory`;
+    if (stat.size > 16 * 1024) return `${entry.path}: ${stat.size} bytes`;
+    try {
+      const content = readFileSync(target, "utf8");
+      if (content.includes("\0")) return `${entry.path}: binary file`;
+      return `${entry.path}:\n${truncateForPrompt(content, 2_000)}`;
+    } catch {
+      return `${entry.path}: unreadable`;
+    }
+  });
+}
+
+function buildCommitMessagePrompt(context: GitCommitMessageContext) {
+  const changedFiles = context.status.entries
+    .map((entry) => `${entry.indexStatus}${entry.worktreeStatus} ${entry.path}`)
+    .join("\n");
+  return [
+    "使用中文生成一条 Conventional Commit message。",
+    "类型前缀仍使用 feat、fix、docs、test、style、refactor、chore 等英文类型。",
+    "冒号后的 subject 用中文，尽量简短，能概括这批变更即可。",
+    "",
+    "Changed files:",
+    changedFiles,
+    "",
+    "Staged diff:",
+    truncateForPrompt(context.stagedDiff || "(none)", 8_000),
+    "",
+    "Unstaged diff:",
+    truncateForPrompt(context.unstagedDiff || "(none)", 12_000),
+    "",
+    "Untracked file summaries:",
+    context.untrackedSummaries.length ? context.untrackedSummaries.join("\n\n") : "(none)",
+  ].join("\n");
+}
+
+function selectCommitMessageModel(root: string): { config: ModelConfig; model: string } | undefined {
+  const workspace = storage.listWorkspaces().find((item) => path.resolve(item.rootPath) === path.resolve(root));
+  if (workspace) {
+    const config = tryCall(() => storage.getModelConfig(workspace.defaultProviderId));
+    if (config && usableCommitMessageModel(config)) {
+      return { config, model: workspace.defaultModel || config.defaultModel };
+    }
+  }
+  const config = storage.preferredModelConfig();
+  return config ? { config, model: config.defaultModel } : undefined;
+}
+
+function usableCommitMessageModel(config: ModelConfig) {
+  return config.providerKind !== "mock" && (config.providerKind === "ollama" || Boolean(config.hasApiKey || secrets.get(`ai-model-api-key-${config.id}`)));
+}
+
+function fallbackCommitMessage(context: GitCommitMessageContext) {
+  const paths = context.status.entries.map((entry) => entry.path);
+  const type = fallbackCommitType(context.status.entries);
+  const subject = fallbackCommitSubject(paths, context.status.entries.some((entry) => entry.indexStatus === "?" || entry.worktreeStatus === "?"));
+  return `${type}: ${subject}`;
+}
+
+function fallbackCommitType(entries: GitStatus["entries"]) {
+  const paths = entries.map((entry) => entry.path.toLowerCase());
+  if (paths.every((item) => item.endsWith(".md") || item.startsWith("docs/"))) return "docs";
+  if (paths.every((item) => item.includes(".test.") || item.includes(".spec."))) return "test";
+  if (paths.every((item) => item.endsWith(".css") || item.endsWith(".scss"))) return "style";
+  if (entries.some((entry) => entry.indexStatus === "?" || entry.worktreeStatus === "?" || entry.indexStatus === "A")) return "feat";
+  return "chore";
+}
+
+function fallbackCommitSubject(paths: string[], hasNewFiles: boolean) {
+  const lower = paths.map((item) => item.toLowerCase());
+  if (lower.some((item) => item.includes("rightpanel") || item.includes("gitservice"))) return "更新 Git 变更面板";
+  if (lower.every((item) => item.startsWith("docs/"))) return "更新文档";
+  if (lower.every((item) => item.includes(".test.") || item.includes(".spec."))) return "更新测试";
+  if (lower.every((item) => item.endsWith(".css") || item.endsWith(".scss"))) return "更新样式";
+  if (paths.length === 1) {
+    const name = path.basename(paths[0]).replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim();
+    return `${hasNewFiles ? "新增" : "更新"}${name || "工作区变更"}`;
+  }
+  const firstDir = paths[0]?.includes("/") ? paths[0].split("/")[0] : "";
+  return `${hasNewFiles ? "新增" : "更新"}${firstDir || "工作区"}变更`;
+}
+
+function sanitizeGeneratedCommitMessage(content: string) {
+  const firstLine = content
+    .replace(/```[\s\S]*?```/g, (block) => block.replace(/```[a-z]*|```/gi, ""))
+    .split("\n")
+    .map((line) => line.trim())
+    .find(Boolean);
+  if (!firstLine) return "";
+  const cleaned = firstLine
+    .replace(/^commit message\s*:\s*/i, "")
+    .replace(/^[-*]\s+/, "")
+    .replace(/^\d+[.)]\s+/, "")
+    .replace(/^["'`]+|["'`.]+$/g, "")
+    .trim();
+  if (!cleaned) return "";
+  const conventional = /^[a-z]+(?:\([^)]+\))?!?:\s+/.test(cleaned)
+    ? cleaned
+    : `chore: ${cleaned.charAt(0).toLowerCase()}${cleaned.slice(1)}`;
+  const limited = conventional.length <= 120 ? conventional : conventional.slice(0, 117).trimEnd();
+  return containsChineseCommitSubject(limited) ? limited : "";
+}
+
+function containsChineseCommitSubject(message: string) {
+  const subject = message.replace(/^[a-z]+(?:\([^)]+\))?!?:\s+/i, "");
+  return /[\u3400-\u9fff]/.test(subject);
+}
+
+function truncateForPrompt(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength)}\n...<truncated>`;
+}
+
 function gitCheckout(root: string, branch: string, reporter?: ToolTraceReporter) {
   if (!branch.trim()) throw new AppError("GIT_ERROR", "分支名不能为空");
   reporter?.progress("正在切换分支", branch.trim(), "stage");
@@ -2835,6 +2993,14 @@ function listDirectory(dirPath: string): DirEntry[] {
   return entries;
 }
 
+function resizeCurrentWindowByWidthDelta(event: Electron.IpcMainInvokeEvent, delta: unknown) {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || typeof delta !== "number" || !Number.isFinite(delta) || Math.abs(delta) < 1) return;
+  const [width, height] = win.getSize();
+  const [minWidth] = win.getMinimumSize();
+  win.setSize(Math.max(minWidth, width + Math.round(delta)), height, false);
+}
+
 function registerIpcHandlers() {
   ipcMain.handle("any-jumper:pick-directory", async (event) => {
     const owner = BrowserWindow.fromWebContents(event.sender);
@@ -2864,6 +3030,7 @@ function registerIpcHandlers() {
         case "workspace_update": return storage.updateWorkspace(args.id, args.request);
         case "workspace_delete": return storage.deleteWorkspace(args.id);
         case "workspace_open_window": return createWindow(args.workspaceId, args.threadId);
+        case "window_resize_by_width_delta": return resizeCurrentWindowByWidthDelta(_event, args.delta);
         case "model_provider_list": return storage.listModelConfigs();
         case "model_provider_save": {
           const config = storage.saveModelConfig(args.request);
@@ -2920,6 +3087,7 @@ function registerIpcHandlers() {
         case "git_diff": return gitDiff(args.rootPath, args.staged);
         case "git_stage": return gitStage(args.rootPath, args.paths);
         case "git_commit": return gitCommit(args.rootPath, args.message);
+        case "git_generate_commit_message": return generateGitCommitMessage(args.rootPath);
         case "git_checkout": return gitCheckout(args.rootPath, args.branch);
         case "git_pull": return gitRun(args.rootPath, ["pull", "--ff-only"]);
         case "git_push": return gitRun(args.rootPath, ["push"]);

@@ -100,9 +100,10 @@ export function normalizeModelNames(models: Array<string | undefined>) {
 export function modelOptionsForProvider(model?: ModelWithList) {
   const options = new Set<string>();
   if (model?.defaultModel?.trim()) options.add(model.defaultModel.trim());
-  for (const item of model?.models || []) {
-    if (item.trim()) options.add(item.trim());
-  }
+  const configuredModels = normalizeModelNames(model?.models || []);
+  for (const item of configuredModels) options.add(item);
+  if (configuredModels.length > 0) return Array.from(options).map((value) => ({ label: value, value }));
+
   const presets = model?.id && providerModelPresets[model.id]
     ? providerModelPresets[model.id]
     : providerKindModelPresets[model?.providerKind || ""] || [];
@@ -115,4 +116,17 @@ export function defaultModelForProvider(model?: ModelWithList, preferredModel?: 
   if (preferredModel?.trim() && modelOptions.includes(preferredModel.trim())) return preferredModel.trim();
   if (model?.defaultModel?.trim()) return model.defaultModel.trim();
   return modelOptions[0] || "mock-agent";
+}
+
+export function resolveProviderModelSelection<T extends ModelWithList>(
+  providers: T[],
+  providerId: string,
+  preferredModel?: string,
+) {
+  const provider = providers.find((item) => item.id === providerId);
+  return {
+    provider,
+    modelOptions: modelOptionsForProvider(provider),
+    model: defaultModelForProvider(provider, preferredModel),
+  };
 }

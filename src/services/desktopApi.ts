@@ -67,6 +67,9 @@ export const desktopApi = {
   workspaceOpenWindow(workspaceId?: string, threadId?: string) {
     return invoke<void>("workspace_open_window", { workspaceId, threadId });
   },
+  resizeCurrentWindowByWidthDelta(delta: number) {
+    return invoke<void>("window_resize_by_width_delta", { delta });
+  },
   modelProviderList() {
     return invoke<ModelConfig[]>("model_provider_list");
   },
@@ -168,6 +171,9 @@ export const desktopApi = {
   },
   gitCommit(rootPath: string, commitMessage: string) {
     return invoke<string>("git_commit", { rootPath, message: commitMessage });
+  },
+  gitGenerateCommitMessage(rootPath: string) {
+    return invoke<string>("git_generate_commit_message", { rootPath });
   },
   gitCheckout(rootPath: string, branch: string) {
     return invoke<string>("git_checkout", { rootPath, branch });

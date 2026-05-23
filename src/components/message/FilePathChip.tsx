@@ -1,5 +1,54 @@
 import { memo, useCallback } from "react";
-import { File } from "lucide-react";
+import { File, FileCode, FileImage, FileJson, FileText } from "lucide-react";
+
+export type FilePathChipTone = "document" | "code" | "data" | "media" | "file";
+
+const DOCUMENT_EXTENSIONS = new Set(["md", "markdown", "mdx", "txt", "log"]);
+const CODE_EXTENSIONS = new Set([
+  "ts",
+  "tsx",
+  "js",
+  "jsx",
+  "mjs",
+  "cjs",
+  "css",
+  "scss",
+  "html",
+  "vue",
+  "svelte",
+  "java",
+  "kt",
+  "go",
+  "rs",
+  "py",
+  "rb",
+  "php",
+  "sh",
+  "sql",
+]);
+const DATA_EXTENSIONS = new Set(["json", "yaml", "yml", "toml", "xml", "csv"]);
+const MEDIA_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"]);
+
+function extensionOf(filePath: string): string {
+  return filePath.split(/[\\/]/).pop()?.split(".").pop()?.toLowerCase() ?? "";
+}
+
+export function filePathChipTone(filePath: string): FilePathChipTone {
+  const ext = extensionOf(filePath);
+  if (DOCUMENT_EXTENSIONS.has(ext)) return "document";
+  if (CODE_EXTENSIONS.has(ext)) return "code";
+  if (DATA_EXTENSIONS.has(ext)) return "data";
+  if (MEDIA_EXTENSIONS.has(ext)) return "media";
+  return "file";
+}
+
+function chipIconForTone(tone: FilePathChipTone) {
+  if (tone === "document") return <FileText size={13} />;
+  if (tone === "code") return <FileCode size={13} />;
+  if (tone === "data") return <FileJson size={13} />;
+  if (tone === "media") return <FileImage size={13} />;
+  return <File size={13} />;
+}
 
 function isAbsoluteFilePath(text: string): boolean {
   // Unix absolute: /xxx
@@ -29,38 +78,39 @@ function looksLikeFilePath(text: string): boolean {
 
 export const FilePathChip = memo(function FilePathChip({
   filePath,
+  onOpen,
   className,
 }: {
   filePath: string;
+  onOpen?: (filePath: string) => void;
   className?: string;
 }) {
   const handleClick = useCallback(() => {
-    // In Electron, open file via IPC
-    const api = (window as any).electronAPI;
-    if (api?.openPath) {
-      api.openPath(filePath);
-    } else {
-      // Fallback: copy to clipboard
-      navigator.clipboard.writeText(filePath);
+    if (onOpen) {
+      onOpen(filePath);
+      return;
     }
-  }, [filePath]);
+    void navigator.clipboard.writeText(filePath);
+  }, [filePath, onOpen]);
+
+  const tone = filePathChipTone(filePath);
 
   return (
     <button
       type="button"
       className={[
-        "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs",
-        "bg-primary/10 text-primary hover:underline cursor-pointer",
-        "border border-primary/20",
+        "file-path-chip",
+        `is-${tone}`,
         className,
       ]
         .filter(Boolean)
         .join(" ")}
       onClick={handleClick}
-      title={filePath}
+      title={onOpen ? `预览 ${filePath}` : `复制 ${filePath}`}
+      aria-label={onOpen ? `预览文件 ${filePath}` : `复制文件路径 ${filePath}`}
     >
-      <File size={11} />
-      <span>{filePath.split("/").pop() || filePath}</span>
+      {chipIconForTone(tone)}
+      <span>{filePath.split(/[\\/]/).pop() || filePath}</span>
     </button>
   );
 });

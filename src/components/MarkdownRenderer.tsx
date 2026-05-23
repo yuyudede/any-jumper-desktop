@@ -212,6 +212,7 @@ export function notifyThemeChange() {
 interface MarkdownRendererProps {
   content: string;
   streaming?: boolean;
+  onFileOpen?: (filePath: string) => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -468,9 +469,12 @@ function MermaidBlock({ code }: { code: string }) {
   }, [code]);
 
   // Zoom with scroll wheel (only when Ctrl/Cmd is held)
-  const handleWheel = useCallback((e: React.WheelEvent) => {
+  // NOTE: React 17+ attaches wheel listeners as passive, so e.preventDefault()
+  // has no effect in the synthetic event. We attach a native non-passive listener
+  // below to actually suppress the browser's built-in Ctrl+Scroll page zoom.
+  const handleWheel = useCallback((e: WheelEvent) => {
     if (!e.ctrlKey && !e.metaKey) return;
-    e.preventDefault();
+    e.preventDefault(); // only works with { passive: false }
     setZoom((z) => Math.min(3, Math.max(0.25, z - e.deltaY * 0.001)));
   }, []);
 
@@ -583,7 +587,7 @@ function MarkdownTable({ children }: { children?: ReactNode }) {
 /*  Renderer                                                           */
 /* ------------------------------------------------------------------ */
 
-export const MarkdownRenderer = memo(function MarkdownRenderer({ content, streaming = false }: MarkdownRendererProps) {
+export const MarkdownRenderer = memo(function MarkdownRenderer({ content, streaming = false, onFileOpen }: MarkdownRendererProps) {
   if (streaming) {
     // 短内容直接展示纯文本，避免闪烁
     if (content.length < 200) {
@@ -666,7 +670,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, stream
               }
               const filePath = detectFilePath(codeText);
               if (filePath) {
-                return <FilePathChip filePath={filePath} />;
+                return <FilePathChip filePath={filePath} onOpen={onFileOpen} />;
               }
               return <code className="md-inline-code">{children}</code>;
             },
@@ -774,7 +778,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, stream
             if (isInline) {
               const filePath = detectFilePath(codeText);
               if (filePath) {
-                return <FilePathChip filePath={filePath} />;
+                return <FilePathChip filePath={filePath} onOpen={onFileOpen} />;
               }
               return <code className="md-inline-code">{children}</code>;
             }

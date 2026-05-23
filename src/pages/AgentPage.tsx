@@ -11,7 +11,7 @@ import {
   History,
   Info,
   KeyRound,
-  Maximize2,
+  MapPin,
   MessageSquare,
   Moon,
   PanelBottomClose,
@@ -128,7 +128,7 @@ import { stripProgressChatter } from "../utils/progressChatter";
 import {
   DEEPAGENTS_RUNTIME_ID,
   defaultModelForProvider,
-  modelOptionsForProvider,
+  resolveProviderModelSelection,
 } from "../utils/modelProviders";
 import { resolveNewSessionModelDefaults } from "../utils/newSessionDefaults";
 import { displaySkillPrompt } from "../utils/skillPromptDisplay";
@@ -174,6 +174,8 @@ const SIDEBAR_EXPANDED_WORKSPACES_STORAGE_KEY = "any-jumper-sidebar-expanded-wor
 const PROJECT_TREE_COLLAPSED_STORAGE_KEY = "any-jumper-sidebar-project-tree-collapsed";
 const TRACE_THOUGHT_VISIBLE_LIMIT = 24;
 const RIGHT_PANEL_MIN_WIDTH = 220;
+const RIGHT_PANEL_RESIZER_WIDTH = 6;
+const GENERATED_PREVIEW_IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"]);
 type ActiveMainView = "chat" | "bridge" | "modelConfig" | "plugin";
 
 export default function AgentPage({
@@ -213,6 +215,8 @@ export default function AgentPage({
     () => localStorage.getItem("any-jumper-right-panel-open") === "true",
   );
   const [rightPanelResizing, setRightPanelResizing] = useState(false);
+  const [rightPanelWindowResizing, setRightPanelWindowResizing] = useState(false);
+  const [rightPanelPreviewFile, setRightPanelPreviewFile] = useState<PreviewFile | null>(null);
   const [rightPanelWidth, setRightPanelWidth] = useState(() => {
     const stored = localStorage.getItem("any-jumper-right-panel-width");
     return stored ? Number(stored) : 300;
@@ -263,13 +267,45 @@ export default function AgentPage({
   const [expandedTraceTurns, setExpandedTraceTurns] = useState<Record<string, boolean>>({});
   const [notice, setNotice] = useState<NoticeState>();
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>();
+  const [copiedPath, setCopiedPath] = useState(false);
   const refreshTimer = useRef<number>();
   const noticeTimer = useRef<number>();
+  const rightPanelWindowResizeTimer = useRef<number>();
+  const rightPanelWindowResizeSuppressTimer = useRef<number>();
+  const rightPanelWindowResizeSuppressedRef = useRef(false);
   const initialSelectionRef = useRef(readInitialAgentSelection());
   const creatingThreadForWorkspaceRef = useRef(new Set<string>());
   const composerRef = useRef<AgentComposerHandle>(null);
+  const windowWidthRef = useRef(typeof window === "undefined" ? 0 : window.innerWidth);
 
   const activeWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
+  const activeWorkspaceId = activeWorkspace?.id;
+  const handleOpenGeneratedFile = useCallback(async (filePath: string) => {
+    if (!activeWorkspace?.rootPath && !isAbsoluteFilePath(filePath)) {
+      showNotice({ tone: "warning", title: "无法预览文件", detail: "当前没有可用于解析相对路径的工作区" });
+      return;
+    }
+
+    const absolutePath = resolveGeneratedFilePath(activeWorkspace?.rootPath, filePath);
+    const previewPath = previewLabelForFilePath(activeWorkspace?.rootPath, filePath);
+
+    try {
+      if (isGeneratedPreviewImage(filePath)) {
+        const dataUrl = await desktopApi.readFileBase64(absolutePath);
+        setRightPanelPreviewFile({ path: previewPath, content: dataUrl, isImage: true });
+      } else {
+        const content = await desktopApi.readFileContent(absolutePath);
+        setRightPanelPreviewFile({ path: previewPath, content });
+      }
+      setRightPanelOpen(true);
+      localStorage.setItem("any-jumper-right-panel-open", "true");
+      pushActivity("预览过程文件", "success", previewPath);
+    } catch (error) {
+      const detailText = errorMessage(error);
+      showNotice({ tone: "warning", title: "文件无法预览", detail: `${filePath}：${detailText}` });
+      pushActivity("预览过程文件失败", "error", `${filePath}: ${detailText}`);
+    }
+  }, [activeWorkspace?.rootPath, pushActivity]);
   const activeWorkspaceThreads = workspaceId ? threadsByWorkspaceId[workspaceId] || [] : [];
   const activeThread = detail?.thread || activeWorkspaceThreads.find((thread) => thread.id === threadId) || findThreadById(threadsByWorkspaceId, threadId);
   const activeModel = models.find((model) => model.id === selectedProvider);
@@ -282,7 +318,6 @@ export default function AgentPage({
     })),
     [models],
   );
-  const sessionModelOptions = useMemo(() => modelOptionsForProvider(activeModel), [activeModel]);
   const permissionView = permissionDisplay(permissionMode);
   const visibleItems = useMemo(
     () => (detail?.items || []).filter((item) => !item.hidden),
@@ -320,11 +355,59 @@ export default function AgentPage({
     () => (detail?.approvals || []).filter((approval) => !approval.decision),
     [detail?.approvals],
   );
+
+  useEffect(() => {
+    windowWidthRef.current = window.innerWidth;
+
+    const handleWindowResize = () => {
+      const nextWindowWidth = window.innerWidth;
+      const previousWindowWidth = windowWidthRef.current || nextWindowWidth;
+      const widthDelta = nextWindowWidth - previousWindowWidth;
+      windowWidthRef.current = nextWindowWidth;
+
+      if (rightPanelWindowResizeSuppressedRef.current) return;
+      if (!rightPanelOpen || !activeWorkspaceId || rightPanelResizing || Math.abs(widthDelta) < 1) return;
+
+      setRightPanelWindowResizing(true);
+      if (rightPanelWindowResizeTimer.current) window.clearTimeout(rightPanelWindowResizeTimer.current);
+      rightPanelWindowResizeTimer.current = window.setTimeout(() => {
+        setRightPanelWindowResizing(false);
+        rightPanelWindowResizeTimer.current = undefined;
+      }, 120);
+      setRightPanelWidth((current) => Math.max(RIGHT_PANEL_MIN_WIDTH, current + widthDelta));
+    };
+
+    window.addEventListener("resize", handleWindowResize);
+    return () => window.removeEventListener("resize", handleWindowResize);
+  }, [activeWorkspaceId, rightPanelOpen, rightPanelResizing]);
+
+  const handleRightPanelToggle = useCallback(() => {
+    const next = !rightPanelOpen;
+
+    if (!next) {
+      rightPanelWindowResizeSuppressedRef.current = true;
+      if (rightPanelWindowResizeSuppressTimer.current) {
+        window.clearTimeout(rightPanelWindowResizeSuppressTimer.current);
+      }
+      rightPanelWindowResizeSuppressTimer.current = window.setTimeout(() => {
+        rightPanelWindowResizeSuppressedRef.current = false;
+        rightPanelWindowResizeSuppressTimer.current = undefined;
+        windowWidthRef.current = window.innerWidth;
+      }, 240);
+      void desktopApi.resizeCurrentWindowByWidthDelta(-(rightPanelWidth + RIGHT_PANEL_RESIZER_WIDTH));
+    }
+
+    setRightPanelOpen(next);
+    localStorage.setItem("any-jumper-right-panel-open", String(next));
+  }, [rightPanelOpen, rightPanelWidth]);
+
   useEffect(() => {
     void bootstrap();
     return () => {
       if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
       if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+      if (rightPanelWindowResizeTimer.current) window.clearTimeout(rightPanelWindowResizeTimer.current);
+      if (rightPanelWindowResizeSuppressTimer.current) window.clearTimeout(rightPanelWindowResizeSuppressTimer.current);
     };
   }, []);
 
@@ -1098,6 +1181,20 @@ export default function AgentPage({
             >
               <FolderTree size={17} />
             </button>
+            {onToggleTheme ? (
+              <>
+                <div className="agent-mini-rail-spacer" />
+                <button
+                  className="agent-mini-rail-entry agent-mini-rail-theme-toggle"
+                  type="button"
+                  aria-label={`切换到${themeMode === "dark" ? "浅色" : "深色"}主题`}
+                  aria-pressed={themeMode === "dark"}
+                  onClick={onToggleTheme}
+                >
+                  {themeMode === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+                </button>
+              </>
+            ) : null}
           </div>
 
           <button
@@ -1226,38 +1323,40 @@ export default function AgentPage({
                                         type="button"
                                         onClick={() => selectThread(workspace, thread)}
                                       >
-                                        <span className="codex-session-title">
+                                        <span className="codex-session-title" title={thread.title}>
                                           {isPinned && <Pin size={11} className="codex-session-pin-icon" />}
-                                          {thread.title}
+                                          <span className="codex-session-title-text">{thread.title}</span>
                                         </span>
                                         <span className="codex-session-meta">
                                           {formatRelativeTime(thread.updatedAt)}
                                         </span>
                                       </button>
-                                      <button
-                                        aria-label={isPinned ? `取消置顶 ${thread.title}` : `置顶 ${thread.title}`}
-                                        className={`codex-session-action ${isPinned ? "codex-session-action-active" : ""}`}
-                                        type="button"
-                                        onClick={() => togglePinThread(thread.id)}
-                                      >
-                                        {isPinned ? <PinOff size={12} /> : <Pin size={12} />}
-                                      </button>
-                                      <button
-                                        aria-label={`归档 ${thread.title}`}
-                                        className="codex-session-action"
-                                        type="button"
-                                        onClick={() => archiveThread(thread)}
-                                      >
-                                        <Archive size={12} />
-                                      </button>
-                                      <button
-                                        aria-label={`删除会话 ${thread.title}`}
-                                        className="codex-session-action codex-session-action-danger"
-                                        type="button"
-                                        onClick={() => removeThread(thread)}
-                                      >
-                                        <Trash2 size={12} />
-                                      </button>
+                                      <div className="codex-session-actions">
+                                        <button
+                                          aria-label={isPinned ? `取消置顶 ${thread.title}` : `置顶 ${thread.title}`}
+                                          className={`codex-session-action ${isPinned ? "codex-session-action-active" : ""}`}
+                                          type="button"
+                                          onClick={() => togglePinThread(thread.id)}
+                                        >
+                                          {isPinned ? <PinOff size={12} /> : <Pin size={12} />}
+                                        </button>
+                                        <button
+                                          aria-label={`归档 ${thread.title}`}
+                                          className="codex-session-action"
+                                          type="button"
+                                          onClick={() => archiveThread(thread)}
+                                        >
+                                          <Archive size={12} />
+                                        </button>
+                                        <button
+                                          aria-label={`删除会话 ${thread.title}`}
+                                          className="codex-session-action codex-session-action-danger"
+                                          type="button"
+                                          onClick={() => removeThread(thread)}
+                                        >
+                                          <Trash2 size={12} />
+                                        </button>
+                                      </div>
                                     </div>
                                   );
                                 })
@@ -1280,7 +1379,59 @@ export default function AgentPage({
             </div>
           ) : null}
 
+          {activeWorkspace || onToggleTheme ? (
+            <div className="agent-sidebar-foot">
+              {activeWorkspace ? (
+                <div className="agent-sidebar-foot-main">
+                  <span><MapPin size={14} /> Current Path</span>
+                  <div className="agent-sidebar-foot-path">
+                    <code title={activeWorkspace.rootPath}>{activeWorkspace.rootPath}</code>
+                  </div>
+                </div>
+              ) : null}
+              <div className="agent-sidebar-foot-actions">
+                {onToggleTheme ? (
+                  <button
+                    className="agent-sidebar-theme-toggle"
+                    type="button"
+                    aria-label={`切换到${themeMode === "dark" ? "浅色" : "深色"}主题`}
+                    aria-pressed={themeMode === "dark"}
+                    onClick={onToggleTheme}
+                  >
+                    {themeMode === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+                  </button>
+                ) : null}
+                {activeWorkspace ? (
+                  <button
+                    type="button"
+                    className="agent-sidebar-foot-copy"
+                    aria-label={copiedPath ? "已复制" : "复制路径"}
+                    onClick={() => {
+                      void navigator.clipboard.writeText(activeWorkspace.rootPath);
+                      setCopiedPath(true);
+                      window.setTimeout(() => setCopiedPath(false), 1500);
+                    }}
+                  >
+                    {copiedPath ? <Check size={12} /> : <Copy size={12} />}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
         </aside>
+
+        {onToggleTheme ? (
+          <button
+            className="agent-corner-theme-toggle"
+            type="button"
+            aria-label={`切换到${themeMode === "dark" ? "浅色" : "深色"}主题`}
+            aria-pressed={themeMode === "dark"}
+            onClick={onToggleTheme}
+          >
+            {themeMode === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+        ) : null}
 
         {!sidebarCollapsed && (
           <ResizeHandle onResize={handleSidebarResize} />
@@ -1351,24 +1502,10 @@ export default function AgentPage({
                 className={`agent-header-action agent-right-panel-toggle agent-side-control ${rightPanelOpen ? "is-active" : ""}`}
                 label={rightPanelOpen ? "收起右侧面板" : "展开右侧面板"}
                 aria-pressed={rightPanelOpen}
-                onClick={() => {
-                  const next = !rightPanelOpen;
-                  setRightPanelOpen(next);
-                  localStorage.setItem("any-jumper-right-panel-open", String(next));
-                }}
+                onClick={handleRightPanelToggle}
               >
                 {rightPanelOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
               </IconButton>
-              {onToggleTheme ? (
-                <IconButton
-                  className={`agent-header-action agent-theme-toggle ${themeMode === "dark" ? "is-active" : ""}`}
-                  label={`切换到${themeMode === "dark" ? "浅色" : "深色"}主题`}
-                  aria-pressed={themeMode === "dark"}
-                  onClick={onToggleTheme}
-                >
-                  {themeMode === "dark" ? <Sun size={15} /> : <Moon size={15} />}
-                </IconButton>
-              ) : null}
             </div>
           </header>
 
@@ -1461,7 +1598,11 @@ export default function AgentPage({
                           {displayContent.trim() || (item.images && item.images.length > 0) ? (
                             <MessageBody>
                               {displayContent.trim() ? (
-                                <MarkdownRenderer content={displayContent} streaming={item.status === "running"} />
+                                <MarkdownRenderer
+                                  content={displayContent}
+                                  streaming={item.status === "running"}
+                                  onFileOpen={handleOpenGeneratedFile}
+                                />
                               ) : null}
                               {item.images && item.images.length > 0 ? (
                                 <MessageImageGrid images={item.images} />
@@ -1620,7 +1761,11 @@ export default function AgentPage({
                           {displayContent.trim() || (item.images && item.images.length > 0) ? (
                             <MessageBody>
                               {displayContent.trim() ? (
-                                <MarkdownRenderer content={displayContent} streaming={item.status === "running"} />
+                                <MarkdownRenderer
+                                  content={displayContent}
+                                  streaming={item.status === "running"}
+                                  onFileOpen={handleOpenGeneratedFile}
+                                />
                               ) : null}
                               {item.images && item.images.length > 0 ? (
                                 <MessageImageGrid images={item.images} />
@@ -1779,7 +1924,11 @@ export default function AgentPage({
                           {displayContent.trim() || (item.images && item.images.length > 0) ? (
                             <MessageBody>
                               {displayContent.trim() ? (
-                                <MarkdownRenderer content={displayContent} streaming={item.status === "running"} />
+                                <MarkdownRenderer
+                                  content={displayContent}
+                                  streaming={item.status === "running"}
+                                  onFileOpen={handleOpenGeneratedFile}
+                                />
                               ) : null}
                               {item.images && item.images.length > 0 ? (
                                 <MessageImageGrid images={item.images} />
@@ -1937,7 +2086,11 @@ export default function AgentPage({
                           {displayContent.trim() || (item.images && item.images.length > 0) ? (
                             <MessageBody>
                               {displayContent.trim() ? (
-                                <MarkdownRenderer content={displayContent} streaming={item.status === "running"} />
+                                <MarkdownRenderer
+                                  content={displayContent}
+                                  streaming={item.status === "running"}
+                                  onFileOpen={handleOpenGeneratedFile}
+                                />
                               ) : null}
                               {item.images && item.images.length > 0 ? (
                                 <MessageImageGrid images={item.images} />
@@ -2046,24 +2199,19 @@ export default function AgentPage({
             <RightPanel
               rootPath={activeWorkspace.rootPath}
               width={rightPanelWidth}
-              resizing={rightPanelResizing}
-              onClose={() => {
-                setRightPanelOpen(false);
-                localStorage.setItem("any-jumper-right-panel-open", "false");
-              }}
+              resizing={rightPanelResizing || rightPanelWindowResizing}
+              externalPreviewFile={rightPanelPreviewFile}
             />
           </>
         ) : null}
         </div>
 
         <ModelSettingsDialog
-          activeModel={activeModel}
-          modelKeyMissing={modelKeyMissing}
           open={modelSettingsOpen}
+          providers={models}
           providerOptions={sessionProviderOptions}
           selectedModel={selectedModel}
           selectedProvider={selectedProvider}
-          modelOptions={sessionModelOptions}
           onClose={() => setModelSettingsOpen(false)}
           onModelChange={setSelectedModel}
           onProviderChange={(value) => {
@@ -2522,9 +2670,6 @@ const AgentComposer = memo(forwardRef<AgentComposerHandle, AgentComposerProps>(f
               {activeModelDisplayName}
               {modelKeyMissing ? <Badge tone="danger">Key</Badge> : null}
             </Button>
-            <IconButton label="在新窗口打开当前会话" onClick={() => void desktopApi.workspaceOpenWindow(workspaceId, threadId)}>
-              <Maximize2 size={16} />
-            </IconButton>
           </div>
           <Button
             aria-label={isRunning ? "停止会话" : sending ? "正在发送" : "发送消息"}
@@ -2693,10 +2838,8 @@ function BridgeSection({
 }
 
 function ModelSettingsDialog({
-  activeModel,
-  modelKeyMissing,
-  modelOptions,
   open,
+  providers,
   providerOptions,
   selectedModel,
   selectedProvider,
@@ -2704,10 +2847,8 @@ function ModelSettingsDialog({
   onModelChange,
   onProviderChange,
 }: {
-  activeModel?: ModelConfig;
-  modelKeyMissing: boolean;
-  modelOptions: Array<{ label: string; value: string }>;
   open: boolean;
+  providers: ModelConfig[];
   providerOptions: Array<{ label: string; value: string }>;
   selectedModel: string;
   selectedProvider: string;
@@ -2717,6 +2858,16 @@ function ModelSettingsDialog({
 }) {
   const [draftProvider, setDraftProvider] = useState(selectedProvider);
   const [draftModel, setDraftModel] = useState(selectedModel);
+  const draftSelection = useMemo(
+    () => resolveProviderModelSelection(providers, draftProvider, draftModel),
+    [providers, draftProvider, draftModel],
+  );
+  const draftModelKeyMissing = Boolean(
+    draftSelection.provider
+      && draftSelection.provider.providerKind !== "mock"
+      && draftSelection.provider.providerKind !== "ollama"
+      && !draftSelection.provider.hasApiKey,
+  );
 
   // Reset drafts when dialog opens with new values
   useEffect(() => {
@@ -2728,7 +2879,7 @@ function ModelSettingsDialog({
 
   function handleConfirm() {
     onProviderChange(draftProvider);
-    onModelChange(draftModel);
+    onModelChange(draftSelection.model);
     onClose();
   }
 
@@ -2745,7 +2896,7 @@ function ModelSettingsDialog({
             Runtime uses DeepAgents; Provider and API Key are managed in Model Config.
           </DialogDescription>
         </DialogHeader>
-        {modelKeyMissing ? (
+        {draftModelKeyMissing ? (
           <div className="inline-alert is-warning">
             <ShieldAlert size={16} />
             <div>
@@ -2760,21 +2911,26 @@ function ModelSettingsDialog({
             <Select
               value={draftProvider}
               options={providerOptions}
-              onChange={(event) => setDraftProvider(event.target.value)}
+              onChange={(event) => {
+                const nextProvider = event.target.value;
+                const nextSelection = resolveProviderModelSelection(providers, nextProvider, draftModel);
+                setDraftProvider(nextProvider);
+                setDraftModel(nextSelection.model);
+              }}
             />
           </label>
           <label className="field-stack">
             <span>Model</span>
             <Select
               className="mono-select"
-              value={draftModel}
-              options={modelOptions}
+              value={draftSelection.model}
+              options={draftSelection.modelOptions}
               onChange={(event) => setDraftModel(event.target.value)}
             />
           </label>
           <div className="model-current-row">
             <Bot size={15} />
-            <span>{activeModel?.displayName || "Model"}</span>
+            <span>{draftSelection.provider?.displayName || "Model"}</span>
           </div>
         </div>
         <DialogFooter>
@@ -3510,6 +3666,31 @@ function tokenUsageByTurnFromDetail(detail?: ThreadDetail) {
       .filter((turn) => turn.tokenUsage)
       .map((turn) => [turn.id, turn.tokenUsage!]),
   );
+}
+
+function isAbsoluteFilePath(filePath: string) {
+  return filePath.startsWith("/") || /^[A-Za-z]:[\\/]/.test(filePath) || filePath.startsWith("\\\\");
+}
+
+function resolveGeneratedFilePath(rootPath: string | undefined, filePath: string) {
+  if (isAbsoluteFilePath(filePath)) return filePath;
+  const root = (rootPath || "").replace(/[\\/]+$/, "");
+  const relative = filePath.replace(/^\.[\\/]/, "").replace(/^[\\/]+/, "");
+  return `${root}/${relative}`.replace(/\/+/g, "/");
+}
+
+function previewLabelForFilePath(rootPath: string | undefined, filePath: string) {
+  if (!rootPath || !isAbsoluteFilePath(filePath)) return filePath;
+  const normalizedRoot = rootPath.replace(/[\\/]+$/, "");
+  if (filePath.startsWith(`${normalizedRoot}/`)) {
+    return filePath.slice(normalizedRoot.length + 1);
+  }
+  return filePath;
+}
+
+function isGeneratedPreviewImage(filePath: string) {
+  const ext = filePath.split(/[\\/]/).pop()?.split(".").pop()?.toLowerCase() ?? "";
+  return GENERATED_PREVIEW_IMAGE_EXTENSIONS.has(ext);
 }
 
 function readStoredExpandedWorkspaceIds() {

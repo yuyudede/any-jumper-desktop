@@ -74,6 +74,9 @@
   --agent-window-radius: 24px;
   --agent-panel-radius: 22px;
   --agent-control-radius: 12px;
+  --agent-status-strip-height: 78px;
+  --agent-right-panel-tabbar-height: 34px;
+  --agent-right-panel-toolbar-height: calc(var(--agent-status-strip-height) - var(--agent-right-panel-tabbar-height));
   --accent-warm: #b79a91;
   --agent-sidebar-width: 284px;
   --window-control-height: 52px;
@@ -1263,9 +1266,8 @@ select {
 .agent-right-panel-tabbar {
   display: flex;
   align-items: flex-end;
-  height: 34px;
+  height: var(--agent-right-panel-tabbar-height);
   flex-shrink: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--panel) 98%, transparent) 0%,
@@ -1300,23 +1302,6 @@ select {
   border-bottom-color: var(--accent);
 }
 
-.agent-right-panel-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
-  color: var(--muted);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: color 0.15s;
-}
-.agent-right-panel-close:hover {
-  color: var(--text);
-}
-
 .agent-right-panel-body {
   flex: 1;
   min-height: 0;
@@ -1333,6 +1318,7 @@ select {
   display: flex;
   align-items: center;
   gap: 8px;
+  height: var(--agent-right-panel-toolbar-height);
   padding: 8px 12px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--line);
@@ -1533,7 +1519,6 @@ select {
   color: var(--danger);
 }
 
-
 /* Git commit bar */
 .git-commit-bar {
   display: flex;
@@ -1693,9 +1678,8 @@ select {
 .agent-right-panel-tabbar {
   display: flex;
   align-items: flex-end;
-  height: 34px;
+  height: var(--agent-right-panel-tabbar-height);
   flex-shrink: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--panel) 98%, transparent) 0%,
@@ -1730,23 +1714,6 @@ select {
   border-bottom-color: var(--accent);
 }
 
-.agent-right-panel-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
-  color: var(--muted);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: color 0.15s;
-}
-.agent-right-panel-close:hover {
-  color: var(--text);
-}
-
 .agent-right-panel-body {
   flex: 1;
   min-height: 0;
@@ -1763,6 +1730,7 @@ select {
   display: flex;
   align-items: center;
   gap: 8px;
+  height: var(--agent-right-panel-toolbar-height);
   padding: 8px 12px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--line);
@@ -2132,30 +2100,60 @@ select {
 
 .agent-header-action.shadcn-button {
   position: relative;
-  width: 34px;
-  height: 34px;
-  border-color: color-mix(in srgb, var(--line) 46%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--panel-soft) 42%, transparent);
+  width: 30px;
+  height: 30px;
+  border-color: transparent;
+  border-radius: 9px;
+  background: transparent;
   color: color-mix(in srgb, var(--muted) 90%, var(--text));
   box-shadow: none;
 }
 
 .agent-header-action.shadcn-button:hover,
 .agent-header-action.shadcn-button:focus-visible {
-  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+  border-color: transparent;
   background: color-mix(in srgb, var(--panel-soft) 58%, transparent);
   color: var(--text);
 }
 
 .agent-header-action.shadcn-button.is-active,
 .agent-header-action.shadcn-button.is-collapsed {
-  border-color: color-mix(in srgb, var(--line) 78%, transparent);
-  background: color-mix(in srgb, var(--panel-soft) 74%, var(--panel));
+  border-color: color-mix(in srgb, var(--line) 36%, transparent);
+  background: color-mix(in srgb, var(--panel-soft) 58%, transparent);
   color: var(--text);
-  box-shadow:
-    var(--rim-highlight),
-    0 8px 18px color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--panel) 34%, transparent);
+}
+
+.agent-corner-theme-toggle {
+  display: none;
+  position: absolute;
+  z-index: 20;
+  left: 16px;
+  bottom: 16px;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid color-mix(in srgb, var(--line) 28%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-glass-strong) 34%, transparent);
+  color: var(--muted);
+  cursor: pointer;
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--panel) 28%, transparent);
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.agent-corner-theme-toggle:hover,
+.agent-corner-theme-toggle:focus-visible {
+  border-color: color-mix(in srgb, var(--line) 50%, transparent);
+  background: color-mix(in srgb, var(--panel-soft) 50%, transparent);
+  color: var(--text);
+  outline: none;
 }
 
 .agent-main {
@@ -2247,7 +2245,9 @@ select {
   align-items: center;
   justify-content: flex-start;
   gap: 14px;
+  min-height: var(--agent-status-strip-height);
   min-width: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 64%, transparent);
   background:
     linear-gradient(180deg, var(--surface-glass-strong) 0%, var(--surface-glass) 100%);
   backdrop-filter: blur(20px);
@@ -2256,17 +2256,6 @@ select {
   padding: 10px 16px 11px;
   border-radius: var(--agent-panel-radius) var(--agent-panel-radius) 0 0;
   -webkit-app-region: drag;
-}
-
-.agent-status-strip::after {
-  content: "";
-  position: absolute;
-  right: 32px;
-  bottom: 0;
-  left: 32px;
-  height: 1px;
-  pointer-events: none;
-  background: color-mix(in srgb, var(--line) 64%, transparent);
 }
 
 .agent-status-actions,
@@ -2332,10 +2321,16 @@ select {
 
 .agent-status-actions {
   flex: 0 0 auto;
-  gap: 8px;
+  gap: 2px;
   margin-left: auto;
   justify-content: flex-end;
-  padding: 0 2px;
+  border: 1px solid color-mix(in srgb, var(--line) 24%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--surface-glass-strong) 34%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--panel) 30%, transparent);
+  padding: 3px;
 }
 
 
@@ -2509,6 +2504,8 @@ select {
 }
 .agent-workbench.is-sidebar-collapsed .agent-mini-rail {
   display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .agent-workbench.is-sidebar-collapsed .agent-sidebar > *:not(.agent-mini-rail) {
   display: none;
@@ -2549,6 +2546,14 @@ select {
   margin: 4px 0;
   background: var(--line);
   opacity: 0.6;
+}
+
+.agent-mini-rail-spacer {
+  margin-top: auto;
+}
+
+.agent-mini-rail-theme-toggle {
+  margin-top: 2px;
 }
 
 /* Tooltip on mini rail entries */
@@ -2929,7 +2934,7 @@ select {
 }
 
 .codex-session-row.is-nested .codex-session-main {
-  padding: 7px 6px 7px 10px;
+  padding: 7px 92px 7px 10px;
 }
 
 .codex-workspace-header {
@@ -2972,6 +2977,7 @@ select {
 
 .codex-session-row {
   display: flex;
+  position: relative;
   align-items: center;
   justify-content: space-between;
   width: 100%;
@@ -2984,6 +2990,7 @@ select {
   color: var(--text);
   font: inherit;
   padding: 0;
+  overflow: hidden;
   transition: background 0.12s ease, transform 0.16s ease, box-shadow 0.16s ease;
   -webkit-app-region: no-drag;
 }
@@ -2996,37 +3003,51 @@ select {
 
 .codex-session-main {
   display: flex;
+  position: relative;
   align-items: center;
+  justify-content: space-between;
   min-width: 0;
   flex: 1 1 auto;
-  gap: 10px;
+  gap: 8px;
   border: none;
   background: transparent;
   color: inherit;
   cursor: pointer;
   font: inherit;
-  padding: 8px 10px;
-  position: relative;
-
+  padding: 8px 92px 8px 10px;
+  text-align: left;
 }
 
 .codex-session-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   overflow: hidden;
   flex: 1 1 auto;
   min-width: 0;
+  max-width: 100%;
   color: inherit;
   font-size: 13px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.codex-session-title-text {
+  display: block;
+  overflow: hidden;
+  min-width: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .codex-session-meta {
   position: absolute;
-  right: 6px;
   top: 50%;
+  right: 10px;
   transform: translateY(-50%);
   display: flex;
   align-items: center;
+  flex: 0 0 auto;
   color: var(--muted);
   font-size: 11.5px;
   white-space: nowrap;
@@ -3034,10 +3055,30 @@ select {
   pointer-events: none;
 }
 
-.codex-session-row:hover .codex-session-meta {
+.codex-session-row:hover .codex-session-meta,
+.codex-session-row:focus-within .codex-session-meta {
   opacity: 0;
 }
 
+.codex-session-actions {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 0.12s ease;
+}
+
+.codex-session-row:hover .codex-session-actions,
+.codex-session-row:focus-within .codex-session-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
 
 .codex-session-row.is-active {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
@@ -3053,22 +3094,14 @@ select {
   width: 28px;
   height: 28px;
   flex: 0 0 auto;
-  margin-right: 3px;
   border: none;
   border-radius: 6px;
   background: transparent;
   color: var(--muted-soft);
   cursor: pointer;
-  opacity: 0;
   transition:
     background 0.12s ease,
-    color 0.12s ease,
-    opacity 0.12s ease;
-}
-
-.codex-session-row:hover .codex-session-action,
-.codex-session-row:focus-within .codex-session-action {
-  opacity: 1;
+    color 0.12s ease;
 }
 
 .codex-session-action:hover,
@@ -3163,12 +3196,64 @@ select {
 .agent-sidebar-foot {
   display: flex;
   flex: 0 0 auto;
-  flex-direction: column;
-  gap: 6px;
+  align-items: flex-end;
+  gap: 10px;
   margin-top: auto;
   border-top: 1px solid var(--line);
   color: var(--muted);
   padding: 12px 4px 0;
+}
+
+.agent-sidebar-foot-main {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agent-sidebar-foot-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.agent-sidebar-theme-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
+  -webkit-app-region: no-drag;
+}
+
+.agent-sidebar-theme-toggle:hover,
+.agent-sidebar-theme-toggle:focus-visible {
+  border-color: color-mix(in srgb, var(--line) 48%, transparent);
+  background: color-mix(in srgb, var(--panel-soft) 46%, transparent);
+  color: var(--text);
+  outline: none;
+}
+
+.agent-sidebar-theme-toggle[aria-pressed="true"] {
+  background: transparent;
+  color: var(--muted);
 }
 
 .agent-sidebar-foot span {
@@ -3199,11 +3284,11 @@ select {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: 7px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -4394,6 +4479,100 @@ pre:last-child {
   padding: 0.1em 0.35em;
 }
 
+.file-path-chip {
+  --file-chip-color: var(--muted);
+  display: inline-flex;
+  max-width: min(360px, 100%);
+  align-items: center;
+  gap: 5px;
+  margin: 0 1px;
+  padding: 1px 5px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--file-chip-color);
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.35;
+  vertical-align: -0.16em;
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease,
+    box-shadow 0.14s ease,
+    transform 0.14s ease;
+}
+
+.file-path-chip svg {
+  flex: 0 0 auto;
+  stroke-width: 2.1px;
+}
+
+.file-path-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-path-chip:hover,
+.file-path-chip:focus-visible {
+  background: color-mix(in srgb, var(--file-chip-color) 10%, transparent);
+  color: var(--file-chip-color);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  outline: none;
+}
+
+.file-path-chip:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--file-chip-color) 28%, transparent);
+}
+
+.file-path-chip:active {
+  transform: translateY(1px);
+}
+
+.file-path-chip.is-document { --file-chip-color: #0969da; }
+.file-path-chip.is-code { --file-chip-color: #8250df; }
+.file-path-chip.is-data { --file-chip-color: #9a6700; }
+.file-path-chip.is-media { --file-chip-color: #1a7f37; }
+.file-path-chip.is-file { --file-chip-color: var(--muted); }
+
+[data-theme="dark"] .file-path-chip.is-document {
+  --file-chip-color: #79c0ff;
+}
+
+[data-theme="dark"] .file-path-chip.is-code {
+  --file-chip-color: #bc8cff;
+}
+
+[data-theme="dark"] .file-path-chip.is-data {
+  --file-chip-color: #d29922;
+}
+
+[data-theme="dark"] .file-path-chip.is-media {
+  --file-chip-color: #3fb950;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .file-path-chip.is-document {
+    --file-chip-color: #79c0ff;
+  }
+
+  :root:not([data-theme]) .file-path-chip.is-code {
+    --file-chip-color: #bc8cff;
+  }
+
+  :root:not([data-theme]) .file-path-chip.is-data {
+    --file-chip-color: #d29922;
+  }
+
+  :root:not([data-theme]) .file-path-chip.is-media {
+    --file-chip-color: #3fb950;
+  }
+}
+
 /* links */
 .md-a {
   color: var(--accent);
@@ -4959,6 +5138,9 @@ pre:last-child {
 
   .agent-sidebar {
     display: none;
+  }
+  .agent-corner-theme-toggle {
+    display: inline-flex;
   }
   .agent-right-panel {
     display: none;
@@ -7703,6 +7885,41 @@ pre:last-child {
   min-width: 320px;
   overflow: hidden;
   border-left: 1px solid var(--line);
+}
+
+.git-change-file-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
+.git-change-file-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.git-change-file-action:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.git-change-file-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.git-stage-btn {
+  color: var(--success);
 }
 
 /* ===== Tool Result Specialized Renderers ===== */

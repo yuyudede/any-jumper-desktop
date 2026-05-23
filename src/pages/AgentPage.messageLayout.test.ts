@@ -246,7 +246,16 @@ describe("AgentPage transcript message layout", () => {
     expect(css).not.toContain(".agent-inspector-resizer");
   });
 
-  it("styles the status header controls as compact icon hit targets", () => {
+  it("does not duplicate the right panel collapse button inside the panel chrome", () => {
+    const panelSource = readProjectFile("src/components/RightPanel.tsx");
+    const css = readProjectFile("src/styles/theme.css");
+
+    expect(panelSource).not.toContain("agent-right-panel-close");
+    expect(panelSource).not.toContain("PanelRightClose");
+    expect(css).not.toContain(".agent-right-panel-close");
+  });
+
+  it("keeps the status header controls as a quiet compact toolbar without theme switching", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
     const css = readProjectFile("src/styles/theme.css");
     const actionsBlocks = Array.from(css.matchAll(/(?:^|\n)\.agent-status-actions\s*\{(?<body>[^}]*)\}/g));
@@ -260,16 +269,60 @@ describe("AgentPage transcript message layout", () => {
     expect(source).toContain("agent-header-action agent-sidebar-toggle");
     expect(source).toContain("agent-header-action agent-terminal-toggle");
     expect(source).toContain("agent-header-action agent-right-panel-toggle");
-    expect(source).toContain("agent-header-action agent-theme-toggle");
+    expect(source).not.toContain("agent-header-action agent-theme-toggle");
+    expect(actionsBlock).toContain("gap: 2px;");
+    expect(actionsBlock).toContain("padding: 3px;");
+    expect(actionsBlock).toContain("border-radius: 13px;");
+    expect(actionsBlock).toContain("background: color-mix(in srgb, var(--surface-glass-strong) 34%, transparent);");
+    expect(actionsBlock).toContain("backdrop-filter: blur(18px) saturate(150%);");
+    expect(actionsBlock).toContain("box-shadow: inset 0 1px 0 color-mix(in srgb, var(--panel) 30%, transparent);");
+    expect(buttonBlock).toContain("width: 30px;");
+    expect(buttonBlock).toContain("height: 30px;");
+    expect(buttonBlock).toContain("border-radius: 9px;");
+    expect(buttonBlock).toContain("background: transparent;");
+    expect(buttonBlock).toContain("box-shadow: none;");
+    expect(css).not.toContain(".agent-theme-toggle.agent-header-action::before");
+    expect(selectedBlock).toContain("background: color-mix(in srgb, var(--panel-soft) 58%, transparent);");
+    expect(selectedBlock).toContain("box-shadow: inset 0 1px 0 color-mix(in srgb, var(--panel) 34%, transparent);");
+  });
+
+  it("places theme switching in the lower-left sidebar area", () => {
+    const source = readProjectFile("src/pages/AgentPage.tsx");
+    const css = readProjectFile("src/styles/theme.css");
+    const footBlock = css.match(/(?:^|\n)\.agent-sidebar-foot\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const footMainBlock = css.match(/(?:^|\n)\.agent-sidebar-foot-main\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const footActionsBlock = css.match(/(?:^|\n)\.agent-sidebar-foot-actions\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const themeButtonBlock = css.match(/(?:^|\n)\.agent-sidebar-theme-toggle\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const miniRailBlock = css.match(/(?:^|\n)\.agent-workbench\.is-sidebar-collapsed \.agent-mini-rail\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+    const miniSpacerBlock = css.match(/(?:^|\n)\.agent-mini-rail-spacer\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const cornerButtonBlock = css.match(/(?:^|\n)\.agent-corner-theme-toggle\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+
+    expect(source).toContain("agent-sidebar-foot-actions");
+    expect(source).toContain("agent-sidebar-foot-main");
+    expect(source).toContain("agent-sidebar-theme-toggle");
+    expect(source).toContain("agent-mini-rail-theme-toggle");
+    expect(source).toContain("agent-corner-theme-toggle");
     expect(source).toContain('aria-pressed={themeMode === "dark"}');
-    expect(actionsBlock).toContain("gap: 8px;");
-    expect(actionsBlock).toContain("padding: 0 2px;");
-    expect(buttonBlock).toContain("width: 34px;");
-    expect(buttonBlock).toContain("height: 34px;");
-    expect(buttonBlock).toContain("border-radius: 10px;");
-    expect(buttonBlock).toContain("background: color-mix(in srgb, var(--panel-soft) 42%, transparent);");
-    expect(selectedBlock).toContain("background: color-mix(in srgb, var(--panel-soft) 74%, var(--panel));");
-    expect(selectedBlock).toContain("box-shadow:");
+    expect(source.indexOf("agent-sidebar-theme-toggle")).toBeLessThan(source.indexOf("agent-sidebar-foot-copy"));
+    expect(source).not.toContain('<span>{themeMode === "dark" ? "浅色" : "深色"}</span>');
+    expect(footBlock).toContain("margin-top: auto;");
+    expect(footBlock).toContain("align-items: flex-end;");
+    expect(footMainBlock).toContain("flex-direction: column;");
+    expect(footMainBlock).toContain("flex: 1 1 auto;");
+    expect(footActionsBlock).toContain("display: flex;");
+    expect(footActionsBlock).toContain("flex-direction: column;");
+    expect(footActionsBlock).toContain("align-items: center;");
+    expect(themeButtonBlock).toContain("width: 24px;");
+    expect(themeButtonBlock).toContain("height: 24px;");
+    expect(themeButtonBlock).toContain("justify-content: center;");
+    expect(themeButtonBlock).toContain("padding: 0;");
+    expect(themeButtonBlock).toContain("background: transparent;");
+    expect(miniRailBlock).toContain("flex: 1 1 auto;");
+    expect(miniSpacerBlock).toContain("margin-top: auto;");
+    expect(cornerButtonBlock).toContain("display: none;");
+    expect(css).toContain("@media (max-width: 1180px)");
+    expect(css).toContain(".agent-corner-theme-toggle {\n    display: inline-flex;");
   });
 
   it("uses a two-column workbench so the transcript and composer keep the main track", () => {
@@ -312,6 +365,35 @@ describe("AgentPage transcript message layout", () => {
     expect(panelBlock).not.toContain("position: absolute;");
     expect(panelBlock).toContain("width: var(--agent-right-panel-width);");
     expect(panelBlock).toContain("min-width: 0;");
+  });
+
+  it("absorbs window right-edge resizing into the right panel width", () => {
+    const source = readProjectFile("src/pages/AgentPage.tsx");
+
+    expect(source).toContain("windowWidthRef");
+    expect(source).toContain('window.addEventListener("resize", handleWindowResize);');
+    expect(source).toContain("const widthDelta = nextWindowWidth - previousWindowWidth;");
+    expect(source).toContain("setRightPanelWindowResizing(true);");
+    expect(source).toContain("setRightPanelWindowResizing(false);");
+    expect(source).toContain("setRightPanelWidth((current) => Math.max(RIGHT_PANEL_MIN_WIDTH, current + widthDelta));");
+    expect(source).toContain("resizing={rightPanelResizing || rightPanelWindowResizing}");
+  });
+
+  it("shrinks the host window when collapsing the right panel from the header toggle", () => {
+    const source = readProjectFile("src/pages/AgentPage.tsx");
+    const desktopApiSource = readProjectFile("src/services/desktopApi.ts");
+    const mainSource = readProjectFile("electron/main.ts");
+
+    expect(source).toContain("const RIGHT_PANEL_RESIZER_WIDTH = 6;");
+    expect(source).toContain("const handleRightPanelToggle = useCallback(() => {");
+    expect(source).toContain("desktopApi.resizeCurrentWindowByWidthDelta(-(rightPanelWidth + RIGHT_PANEL_RESIZER_WIDTH));");
+    expect(source).toContain("rightPanelWindowResizeSuppressedRef");
+    expect(source).toContain("onClick={handleRightPanelToggle}");
+    expect(desktopApiSource).toContain("resizeCurrentWindowByWidthDelta(delta: number)");
+    expect(desktopApiSource).toContain('invoke<void>("window_resize_by_width_delta", { delta })');
+    expect(mainSource).toContain("function resizeCurrentWindowByWidthDelta(event: Electron.IpcMainInvokeEvent, delta: unknown)");
+    expect(mainSource).toContain('case "window_resize_by_width_delta": return resizeCurrentWindowByWidthDelta(_event, args.delta);');
+    expect(mainSource).toContain("win.setSize(Math.max(minWidth, width + Math.round(delta)), height, false);");
   });
 
   it("shows pending approval actions inside the inline turn trace", () => {
@@ -537,6 +619,29 @@ describe("AgentPage transcript message layout", () => {
     expect(rendererSource).toContain("streaming?: boolean");
     expect(rendererSource).toContain("if (streaming) {");
     expect(rendererSource).toContain('className="streaming-markdown-text"');
+  });
+
+  it("opens generated file chips in the right panel preview tab", () => {
+    const source = readProjectFile("src/pages/AgentPage.tsx");
+    const rendererSource = readProjectFile("src/components/MarkdownRenderer.tsx");
+    const chipSource = readProjectFile("src/components/message/FilePathChip.tsx");
+    const rightPanelSource = readProjectFile("src/components/RightPanel.tsx");
+
+    expect(source).toContain("handleOpenGeneratedFile");
+    expect(source).toContain("rightPanelPreviewFile");
+    expect(source).toContain("setRightPanelPreviewFile");
+    expect(source).toContain("setRightPanelOpen(true)");
+    expect(source).toContain('localStorage.setItem("any-jumper-right-panel-open", "true")');
+    expect(source).toContain("externalPreviewFile={rightPanelPreviewFile}");
+    expect(source).not.toContain("setPreviewOpen(true)");
+    expect(source).toContain("onFileOpen={handleOpenGeneratedFile}");
+    expect(rendererSource).toContain("onFileOpen?: (filePath: string) => void");
+    expect(rendererSource).toContain("<FilePathChip filePath={filePath} onOpen={onFileOpen}");
+    expect(rightPanelSource).toContain("externalPreviewFile?: PreviewFile | null");
+    expect(rightPanelSource).toContain("externalPreviewFile");
+    expect(rightPanelSource).toContain('setActiveTab("preview")');
+    expect(chipSource).toContain("onOpen?: (filePath: string) => void");
+    expect(chipSource).not.toContain("electronAPI");
   });
 
   it("does not mix Ant Design into the src design system or dependencies", () => {
