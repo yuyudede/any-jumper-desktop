@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import AgentPage from "../pages/AgentPage";
+import PortalCapsule from "../pages/PortalCapsule";
 import { desktopApi } from "../services/desktopApi";
 import type { ActivityItem, AppSettings } from "../types";
 import type { ThemeMode } from "../main";
@@ -15,9 +16,22 @@ interface AppProps {
 
 export default function App({ themeMode, onToggleTheme }: AppProps) {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+  const [isWindowFocused, setIsWindowFocused] = useState(true);
+  const isPortalCapsule = new URLSearchParams(window.location.search).get("portal") === "capsule";
 
   useEffect(() => {
     void refreshSettings();
+  }, []);
+
+  useEffect(() => {
+    const handleFocus = () => setIsWindowFocused(true);
+    const handleBlur = () => setIsWindowFocused(false);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("blur", handleBlur);
+    };
   }, []);
 
   async function refreshSettings() {
@@ -41,9 +55,18 @@ export default function App({ themeMode, onToggleTheme }: AppProps) {
     // Kept for AgentPage compatibility after merging the shell navigation.
   }
 
+  if (isPortalCapsule) {
+    return <PortalCapsule />;
+  }
+
   return (
-    <div className="app-shell is-agent-active">
+    <div className={`app-shell is-agent-active ${isWindowFocused ? "" : "is-window-inactive"}`}>
       <div className="app-titlebar" aria-hidden="true" />
+      <div className="app-traffic-lights-placeholder" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
       <div className="workspace is-agent-workspace">
         <main className="content-grid is-agent-grid">
           <section className="main-panel">

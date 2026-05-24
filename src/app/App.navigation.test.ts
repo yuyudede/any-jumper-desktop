@@ -57,7 +57,7 @@ describe("App navigation shell", () => {
     expect(css).toContain("-webkit-app-region: no-drag");
   });
 
-  it("uses the native inactive traffic lights without drawing a duplicate overlay", () => {
+  it("draws inactive traffic lights only while the native controls are unfocused", () => {
     const appSource = readProjectFile("src/app/App.tsx");
     const electronSource = readProjectFile("electron/main.ts");
     const css = readProjectFile("src/styles/theme.css");
@@ -66,14 +66,16 @@ describe("App navigation shell", () => {
     expect(css).toContain("--window-control-safe-width: 72px;");
     expect(css).toContain("--window-control-x: 16px;");
     expect(css).toContain("--window-control-y: 20px;");
-    expect(appSource).not.toContain("isWindowFocused");
-    expect(appSource).not.toContain("is-window-inactive");
-    expect(appSource).not.toContain("app-traffic-lights-placeholder");
-    expect(appSource).not.toContain('window.addEventListener("blur"');
-    expect(appSource).not.toContain('window.addEventListener("focus"');
-    expect(css).not.toContain(".app-traffic-lights-placeholder");
-    expect(css).not.toContain(".app-shell.is-window-inactive");
-    expect(css).not.toContain("--window-control-inactive-dot");
+    expect(appSource).toContain("isWindowFocused");
+    expect(appSource).toContain("is-window-inactive");
+    expect(appSource).toContain("app-traffic-lights-placeholder");
+    expect(appSource).toContain('window.addEventListener("blur"');
+    expect(appSource).toContain('window.addEventListener("focus"');
+    expect(css).toContain(".app-traffic-lights-placeholder");
+    expect(css).toContain(".app-shell.is-window-inactive .app-traffic-lights-placeholder");
+    expect(css).toContain("--window-control-inactive-dot");
+    expect(css).toContain("opacity: 0;");
+    expect(css).toContain("opacity: 1;");
   });
 
   it("keeps the agent side controls outside the macOS window controls", () => {
@@ -256,18 +258,22 @@ describe("App navigation shell", () => {
     expect(source).toContain("activeMainView");
     expect(source).toContain("<BridgeMainPanel");
     expect(source).toContain("<PluginPage");
+    expect(source).toContain("<PortalPage");
     expect(source).not.toContain('TabsTrigger value="bridge"');
   });
 
-  it("places Plugin as its own entry below Model-Config", () => {
+  it("places Portal as its own primary entry between Model-Config and Plugin", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
     const modelIndex = source.indexOf("<span>Model-Config</span>");
+    const portalIndex = source.indexOf("<span>Portal</span>");
     const pluginIndex = source.indexOf("<span>Plugin</span>");
     const projectIndex = source.indexOf('className="agent-sidebar-head"', pluginIndex);
 
     expect(modelIndex).toBeGreaterThan(-1);
-    expect(pluginIndex).toBeGreaterThan(modelIndex);
+    expect(portalIndex).toBeGreaterThan(modelIndex);
+    expect(pluginIndex).toBeGreaterThan(portalIndex);
     expect(projectIndex).toBeGreaterThan(pluginIndex);
+    expect(source).toContain('activeMainView === "portal"');
     expect(source).toContain('activeMainView === "plugin"');
   });
 

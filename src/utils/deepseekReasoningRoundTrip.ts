@@ -13,13 +13,17 @@ type CompletionModel = {
 export function addDeepSeekReasoningContentToCompletionsMessages(
   requestMessages: unknown,
   sourceMessages?: unknown[],
+  reasoningByToolCallId = new Map<string, string>(),
 ) {
   if (!Array.isArray(requestMessages)) return;
   requestMessages.forEach((message, index) => {
     const requestMessage = asRecord(message);
     if (!requestMessage || requestMessage.role !== "assistant") return;
     if (hasOwn(requestMessage, "reasoning_content")) return;
-    requestMessage.reasoning_content = reasoningContentFromMessage(sourceMessages?.[index]) ?? "";
+    const toolCallReasoning = toolCallIdsFromMessage(requestMessage)
+      .map((id) => reasoningByToolCallId.has(id) ? reasoningByToolCallId.get(id) : undefined)
+      .find((value) => value !== undefined);
+    requestMessage.reasoning_content = reasoningContentFromMessage(sourceMessages?.[index]) ?? toolCallReasoning ?? "";
   });
 }
 
@@ -30,9 +34,10 @@ export function enableDeepSeekReasoningRoundTrip<T extends CompletionModel>(mode
   }
 
   let activeSourceMessages: unknown[] | undefined;
+  const reasoningByToolCallId = new Map<string, string>();
   const originalCompletionWithRetry = completions.completionWithRetry.bind(completions);
   completions.completionWithRetry = (request: CompletionRequest, ...rest: any[]) => {
-    addDeepSeekReasoningContentToCompletionsMessages(request?.messages, activeSourceMessages);
+    addDeepSeekReasoningContentToCompletionsMessages(request?.messages, activeSourceMessages, reasoningByToolCallId);
     return originalCompletionWithRetry(request, ...rest);
   };
 
@@ -57,9 +62,17 @@ export function enableDeepSeekReasoningRoundTrip<T extends CompletionModel>(mode
     completions._streamResponseChunks = async function* (messages: unknown[], ...rest: any[]) {
       const previous = activeSourceMessages;
       activeSourceMessages = Array.isArray(messages) ? messages : undefined;
+      let responseReasoning = "";
+      const responseToolCallIds = new Set<string>();
       try {
-        yield* originalStreamResponseChunks(messages, ...rest);
+        for await (const chunk of originalStreamResponseChunks(messages, ...rest)) {
+          const message = asRecord(chunk)?.message ?? chunk;
+          responseReasoning += reasoningContentFromMessage(message) ?? "";
+          for (const id of toolCallIdsFromMessage(message)) responseToolCallIds.add(id);
+          yield chunk;
+        }
       } finally {
+        for (const id of responseToolCallIds) reasoningByToolCallId.set(id, responseReasoning);
         activeSourceMessages = previous;
       }
     };
@@ -78,6 +91,29 @@ function reasoningContentFromMessage(message: unknown) {
   if (camel !== undefined) return camel;
   const additional = asRecord(record.additional_kwargs ?? record.additionalKwargs);
   return stringProperty(additional, "reasoning_content");
+}
+
+function toolCallIdsFromMessage(message: unknown): string[] {
+  const record = asRecord(message);
+  if (!record) return [];
+  const ids = [
+    ...toolCallIdsFromArray(record.tool_calls),
+    ...toolCallIdsFromArray(record.tool_call_chunks),
+    ...toolCallIdsFromArray(asRecord(record.additional_kwargs)?.tool_calls),
+    ...toolCallIdsFromArray(asRecord(record.additional_kwargs)?.tool_call_chunks),
+    ...toolCallIdsFromArray(record.contentBlocks),
+  ];
+  return Array.from(new Set(ids));
+}
+
+function toolCallIdsFromArray(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const record = asRecord(item);
+      return typeof record?.id === "string" ? record.id : undefined;
+    })
+    .filter((id): id is string => Boolean(id));
 }
 
 function stringProperty(record: AnyRecord | undefined, key: string) {

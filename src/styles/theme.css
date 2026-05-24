@@ -91,6 +91,7 @@
   --window-control-safe-width: 72px;
   --window-control-x: 16px;
   --window-control-y: 20px;
+  --window-control-inactive-dot: color-mix(in srgb, var(--muted) 40%, transparent);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -373,6 +374,33 @@ select {
   -webkit-app-region: drag;
   user-select: none;
   pointer-events: auto;
+}
+
+.app-traffic-lights-placeholder {
+  position: absolute;
+  z-index: 61;
+  top: var(--window-control-y);
+  left: var(--window-control-x);
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.app-traffic-lights-placeholder span {
+  width: 12px;
+  height: 12px;
+  border: 1px solid color-mix(in srgb, var(--muted) 20%, transparent);
+  border-radius: 999px;
+  background: var(--window-control-inactive-dot);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--panel) 42%, transparent);
+}
+
+.app-shell.is-window-inactive .app-traffic-lights-placeholder {
+  opacity: 1;
 }
 
 .side-nav {
@@ -919,6 +947,70 @@ select {
   gap: 16px;
 }
 
+.shortcut-recorder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.shortcut-recorder.is-recording .mono-input {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--line));
+  background: color-mix(in srgb, var(--primary) 6%, var(--panel));
+  color: var(--muted);
+}
+
+.portal-sub-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  margin: 4px 0 18px;
+}
+
+.portal-sub-tab {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  gap: 8px;
+  margin-bottom: -1px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.portal-sub-tab span {
+  font-size: 13px;
+  font-weight: var(--font-weight-strong);
+}
+
+.portal-sub-tab:hover,
+.portal-sub-tab:focus-visible {
+  color: var(--text);
+  outline: none;
+}
+
+.portal-sub-tab.is-active {
+  border-bottom-color: var(--text);
+}
+
+.portal-child-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.portal-child-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+.portal-sub-tab:focus-visible {
+  outline: none;
+}
+
 .form-hint {
   margin: 12px 0 0;
   color: var(--muted);
@@ -1035,6 +1127,228 @@ select {
 
 .plugin-install-input {
   flex: 1;
+}
+
+.portal-capsule-root {
+  display: flex;
+  width: 100vw;
+  min-width: 0;
+  height: 100vh;
+  min-height: 0;
+  box-sizing: border-box;
+  background: transparent;
+  padding: 0;
+  -webkit-app-region: no-drag;
+}
+
+.portal-capsule {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  flex-direction: column;
+  gap: 9px;
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 94%, transparent), color-mix(in srgb, var(--panel-soft) 96%, transparent));
+  box-shadow: none;
+  padding: 12px;
+  overflow: hidden;
+  -webkit-app-region: drag;
+}
+
+.portal-capsule-header,
+.portal-capsule-footer,
+.portal-capsule-input-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.portal-capsule-header {
+  gap: 8px;
+  -webkit-app-region: drag;
+}
+
+.portal-capsule-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-right: auto;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: var(--font-weight-ui);
+}
+
+.portal-capsule-icon-button,
+.portal-capsule-close {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.portal-capsule-icon-button:hover,
+.portal-capsule-icon-button:focus-visible,
+.portal-capsule-close:hover,
+.portal-capsule-close:focus-visible {
+  border-color: var(--line);
+  background: var(--panel-soft);
+  color: var(--text);
+  outline: none;
+}
+
+.portal-capsule-icon-button.is-active {
+  color: var(--text);
+}
+
+.portal-capsule-input-row {
+  gap: 7px;
+  margin-top: auto;
+  -webkit-app-region: no-drag;
+}
+
+.portal-capsule-input.shadcn-textarea {
+  min-height: 44px;
+  max-height: 88px;
+  flex: 1;
+  resize: none;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 10px 12px;
+}
+
+.portal-capsule-send.shadcn-button {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 999px;
+}
+
+.portal-capsule-error {
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 7px 9px;
+  -webkit-app-region: no-drag;
+}
+
+.portal-capsule-history {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  gap: 7px;
+  overflow: auto;
+  border-radius: 12px;
+  color: var(--text);
+  padding-right: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.portal-capsule-message {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-soft);
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.portal-capsule-message.is-user {
+  max-width: 84%;
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel-soft));
+}
+
+.portal-capsule-message.is-assistant {
+  align-self: stretch;
+}
+
+.portal-capsule-message .markdown-body {
+  font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+
+.portal-capsule-message .md-p,
+.portal-capsule-message .md-ul,
+.portal-capsule-message .md-ol,
+.portal-capsule-message pre {
+  margin-bottom: 6px;
+}
+
+.portal-capsule-message .md-ul,
+.portal-capsule-message .md-ol {
+  padding-left: 16px;
+}
+
+.portal-capsule-message .md-h1,
+.portal-capsule-message .md-h2,
+.portal-capsule-message .md-h3 {
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.portal-capsule-message p,
+.portal-capsule-message > :first-child {
+  margin-top: 0;
+}
+
+.portal-capsule-message p,
+.portal-capsule-message > :last-child {
+  margin-bottom: 0;
+}
+
+.portal-capsule-footer {
+  justify-content: flex-end;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  -webkit-app-region: no-drag;
+}
+
+.portal-capsule-footer-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.portal-capsule-footer button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  padding: 2px 0;
+}
+
+.portal-capsule-footer button:not(:disabled):hover,
+.portal-capsule-footer button:not(:disabled):focus-visible {
+  color: var(--text);
+  outline: none;
+}
+
+.portal-capsule-footer button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .desc-text {

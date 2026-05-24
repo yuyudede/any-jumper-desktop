@@ -23,6 +23,9 @@ contextBridge.exposeInMainWorld("anyJumper", {
   terminalInvoke(command: string, args?: Record<string, unknown>) {
     return ipcRenderer.invoke("any-jumper:invoke", command, args ?? {});
   },
+  portalInvoke(command: string, args?: Record<string, unknown>) {
+    return ipcRenderer.invoke("any-jumper:invoke", command, args ?? {});
+  },
   onTerminalData(handler: (event: { id: string; data: string }) => void) {
     const listener = (_event: Electron.IpcRendererEvent, payload: { id: string; data: string }) => handler(payload);
     ipcRenderer.on("terminal-data", listener);

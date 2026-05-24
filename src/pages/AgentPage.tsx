@@ -19,6 +19,7 @@ import {
   PanelBottomOpen,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelTopOpen,
   PanelRightOpen,
   PanelRightClose,
   Package,
@@ -91,6 +92,7 @@ import { PreviewPanel, type PreviewFile } from "../components/PreviewPanel";
 import { RightPanel } from "../components/RightPanel";
 import ModelPage from "./ModelPage";
 import PluginPage from "./PluginPage";
+import PortalPage from "./PortalPage";
 import { ProjectPicker } from "../components/ProjectPicker";
 import TerminalPanel from "../components/TerminalPanel";
 import { desktopApi, errorDetail, errorMessage } from "../services/desktopApi";
@@ -177,7 +179,7 @@ const TRACE_THOUGHT_VISIBLE_LIMIT = 24;
 const RIGHT_PANEL_MIN_WIDTH = 220;
 const RIGHT_PANEL_RESIZER_WIDTH = 6;
 const GENERATED_PREVIEW_IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"]);
-type ActiveMainView = "chat" | "bridge" | "modelConfig" | "plugin";
+type ActiveMainView = "chat" | "bridge" | "modelConfig" | "portal" | "plugin";
 
 export default function AgentPage({
   settings,
@@ -1176,6 +1178,14 @@ export default function AgentPage({
               <KeyRound size={17} />
             </button>
             <button
+              className={`agent-mini-rail-entry ${activeMainView === "portal" ? "is-active" : ""}`}
+              type="button"
+              aria-label="Portal"
+              onClick={() => setActiveMainView("portal")}
+            >
+              <PanelTopOpen size={17} />
+            </button>
+            <button
               className={`agent-mini-rail-entry ${activeMainView === "plugin" ? "is-active" : ""}`}
               type="button"
               aria-label="Plugin"
@@ -1224,6 +1234,15 @@ export default function AgentPage({
           >
             <KeyRound size={17} />
             <span>Model-Config</span>
+          </button>
+
+          <button
+            className={`agent-bridge-entry ${activeMainView === "portal" ? "is-active" : ""}`}
+            type="button"
+            onClick={() => setActiveMainView("portal")}
+          >
+            <PanelTopOpen size={17} />
+            <span>Portal</span>
           </button>
 
           <button
@@ -1460,13 +1479,13 @@ export default function AgentPage({
           <header className="agent-status-strip">
             <div className="agent-status-copy">
               <div className="agent-status-title">
-                <strong>{activeMainView === "bridge" ? "Agent-Bridge" : activeMainView === "modelConfig" ? "Model-Config" : activeMainView === "plugin" ? "Plugin" : activeThread?.title || "New Session"}</strong>
-                <Badge tone={activeMainView === "bridge" ? bridgeStatusTone(bridgeStatus) : activeMainView === "modelConfig" || activeMainView === "plugin" ? "muted" : activeThread?.status === "running" ? "success" : "muted"}>
-                  <span className={`agent-status-dot ${activeMainView === "bridge" ? bridgeStatus?.listening ? "is-running" : "is-idle" : activeMainView === "modelConfig" || activeMainView === "plugin" ? "is-idle" : activeThread?.status === "running" ? "is-running" : "is-idle"}`} />
-                  {activeMainView === "bridge" ? bridgeStatusLabel(bridgeStatus) : activeMainView === "modelConfig" || activeMainView === "plugin" ? "Settings" : threadStatusLabel(activeThread?.status)}
+                <strong>{activeMainView === "bridge" ? "Agent-Bridge" : activeMainView === "modelConfig" ? "Model-Config" : activeMainView === "portal" ? "Portal" : activeMainView === "plugin" ? "Plugin" : activeThread?.title || "New Session"}</strong>
+                <Badge tone={activeMainView === "bridge" ? bridgeStatusTone(bridgeStatus) : activeMainView === "modelConfig" || activeMainView === "portal" || activeMainView === "plugin" ? "muted" : activeThread?.status === "running" ? "success" : "muted"}>
+                  <span className={`agent-status-dot ${activeMainView === "bridge" ? bridgeStatus?.listening ? "is-running" : "is-idle" : activeMainView === "modelConfig" || activeMainView === "portal" || activeMainView === "plugin" ? "is-idle" : activeThread?.status === "running" ? "is-running" : "is-idle"}`} />
+                  {activeMainView === "bridge" ? bridgeStatusLabel(bridgeStatus) : activeMainView === "modelConfig" || activeMainView === "portal" || activeMainView === "plugin" ? "Settings" : threadStatusLabel(activeThread?.status)}
                 </Badge>
               </div>
-              <div className="agent-status-meta" aria-label={activeMainView === "bridge" ? "Bridge status" : activeMainView === "modelConfig" ? "Model config" : activeMainView === "plugin" ? "Plugin status" : "Session status"}>
+              <div className="agent-status-meta" aria-label={activeMainView === "bridge" ? "Bridge status" : activeMainView === "modelConfig" ? "Model config" : activeMainView === "portal" ? "Portal status" : activeMainView === "plugin" ? "Plugin status" : "Session status"}>
                 {activeMainView === "bridge" ? (
                   <>
                     <span className="agent-meta-pill"><TerminalSquare size={12} />{bridgeStatus?.endpoint || "http://127.0.0.1:9528"}</span>
@@ -1478,6 +1497,11 @@ export default function AgentPage({
                   <>
                     <span className="agent-meta-pill"><KeyRound size={12} />Provider & API Key</span>
                     <span className="agent-meta-pill"><Bot size={12} />{models.length} models</span>
+                  </>
+                ) : activeMainView === "portal" ? (
+                  <>
+                    <span className="agent-meta-pill"><Package size={12} />Portal</span>
+                    <span className="agent-meta-pill"><Wrench size={12} />子功能设置</span>
                   </>
                 ) : activeMainView === "plugin" ? (
                   <>
@@ -1534,6 +1558,10 @@ export default function AgentPage({
           ) : activeMainView === "modelConfig" ? (
             <div className="model-config-inline">
               <ModelPage pushActivity={pushActivity} />
+            </div>
+          ) : activeMainView === "portal" ? (
+            <div className="model-config-inline">
+              <PortalPage pushActivity={pushActivity} />
             </div>
           ) : activeMainView === "plugin" ? (
             <div className="model-config-inline">

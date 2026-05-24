@@ -15,6 +15,12 @@ export interface AppSettings {
   gitCommand: string;
   defaultNewSessionProviderId?: string;
   defaultNewSessionModel?: string;
+  mainWindowShortcut?: string;
+  portalShortcut?: string;
+  portalDefaultWorkspaceId?: string;
+  portalDefaultProviderId?: string;
+  portalDefaultModel?: string;
+  portalReasoningEffort?: string;
 }
 
 export interface ProjectContext {

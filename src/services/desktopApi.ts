@@ -203,7 +203,26 @@ export const desktopApi = {
     return invoke<AppSettings>("get_settings");
   },
   saveSettings(settings: AppSettings) {
-    return invoke<void>("save_settings", { settings });
+    return invoke<boolean>("save_settings", { settings });
+  },
+  portalShortcutReregister() {
+    return invoke<boolean>("portal_shortcut_reregister");
+  },
+  portalHide() {
+    const api = bridge();
+    return api.portalInvoke ? api.portalInvoke<void>("portal_window_hide") : invoke<void>("portal_window_hide");
+  },
+  portalSetAlwaysOnTop(pinned: boolean) {
+    const api = bridge();
+    return api.portalInvoke
+      ? api.portalInvoke<boolean>("portal_window_set_always_on_top", { pinned })
+      : invoke<boolean>("portal_window_set_always_on_top", { pinned });
+  },
+  portalOpenChat(workspaceId?: string, threadId?: string) {
+    const api = bridge();
+    return api.portalInvoke
+      ? api.portalInvoke<void>("portal_open_chat", { workspaceId, threadId })
+      : invoke<void>("portal_open_chat", { workspaceId, threadId });
   },
   openExternalUrl(url: string) {
     return invoke<void>("open_external_url", { url });

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, safeStorage, shell } from "electron";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -52,6 +52,7 @@ import { truncateTraceThoughtText } from "../src/utils/traceThoughtText";
 import { TurnOutputClassifier, type TurnOutputSegment } from "../src/utils/turnOutputClassifier";
 import { AgentBridgeService } from "./agentBridge";
 import { enableDeepSeekReasoningRoundTrip } from "../src/utils/deepseekReasoningRoundTrip";
+import { DEFAULT_MAIN_WINDOW_SHORTCUT, DEFAULT_PORTAL_SHORTCUT } from "../src/utils/portalDefaults";
 import {
   classifyToolKind,
   createToolSummary,
@@ -79,6 +80,11 @@ const DEEPAGENTS_RUNTIME_ID = "deepagents";
 const DEEPSEEK_OPENAI_BASE_URL = "https://api.deepseek.com";
 const DEEPSEEK_ANTHROPIC_BASE_URL = "https://api.deepseek.com/anthropic";
 const DEEPSEEK_MODEL_PRESETS = ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"];
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
 
 let storage: StorageService;
 let secrets: SecretService;
@@ -86,7 +92,13 @@ let settings: SettingsService;
 let appRuntime: AgentRuntimeService;
 let terminalManager: TerminalManager;
 let agentBridge: AgentBridgeService;
+let portalWindow: BrowserWindow | undefined;
+let portalWindowPinned = true;
+let activatingPortalWindow = false;
+let registeredMainWindowShortcut: string | undefined;
+let registeredPortalShortcut: string | undefined;
 const windows = new Set<BrowserWindow>();
+const mainWindows = new Set<BrowserWindow>();
 
 
 function detectUnixShell(): string {
@@ -253,6 +265,58 @@ function emitAgentBridgeEvent(payload: unknown) {
   for (const win of windows) {
     if (!win.isDestroyed()) win.webContents.send("agent-bridge-event", payload);
   }
+}
+
+function portalShortcut() {
+  return settings?.get().portalShortcut?.trim() || DEFAULT_PORTAL_SHORTCUT;
+}
+
+function mainWindowShortcut() {
+  return settings?.get().mainWindowShortcut?.trim() || DEFAULT_MAIN_WINDOW_SHORTCUT;
+}
+
+function registerPortalShortcut() {
+  if (registeredPortalShortcut) {
+    globalShortcut.unregister(registeredPortalShortcut);
+    registeredPortalShortcut = undefined;
+  }
+  const shortcut = portalShortcut();
+  if (!shortcut) return false;
+  let ok = false;
+  try {
+    ok = globalShortcut.register(shortcut, () => {
+      void showPortalWindow();
+    });
+  } catch {
+    ok = false;
+  }
+  if (ok) registeredPortalShortcut = shortcut;
+  return ok;
+}
+
+function registerMainWindowShortcut() {
+  if (registeredMainWindowShortcut) {
+    globalShortcut.unregister(registeredMainWindowShortcut);
+    registeredMainWindowShortcut = undefined;
+  }
+  const shortcut = mainWindowShortcut();
+  if (!shortcut) return true;
+  let ok = false;
+  try {
+    ok = globalShortcut.register(shortcut, () => {
+      toggleMainWindow();
+    });
+  } catch {
+    ok = false;
+  }
+  if (ok) registeredMainWindowShortcut = shortcut;
+  return ok;
+}
+
+function registerGlobalShortcuts() {
+  const portalRegistered = registerPortalShortcut();
+  const mainWindowRegistered = registerMainWindowShortcut();
+  return portalRegistered && mainWindowRegistered;
 }
 
 class StorageService {
@@ -3110,7 +3174,14 @@ function registerIpcHandlers() {
         case "get_project_context": return getProjectContext(args.projectPath);
         case "list_idea_project_tasks": return discoverIdeaProjectTasks();
         case "get_settings": return settings.get();
-        case "save_settings": return settings.save(args.settings);
+        case "save_settings": {
+          settings.save(args.settings);
+          return registerGlobalShortcuts();
+        }
+        case "portal_shortcut_reregister": return registerGlobalShortcuts();
+        case "portal_window_hide": return hidePortalWindow();
+        case "portal_window_set_always_on_top": return setPortalWindowAlwaysOnTop(Boolean(args.pinned));
+        case "portal_open_chat": return createWindow(args.workspaceId, args.threadId);
         case "open_external_url": return shell.openExternal(args.url);
         case "agent_bridge_status": return agentBridge.status();
         case "agent_bridge_restart": return agentBridge.restart();
@@ -3185,7 +3256,15 @@ function createWindow(workspaceId?: string, threadId?: string) {
     },
   });
   windows.add(win);
-  win.on("closed", () => windows.delete(win));
+  mainWindows.add(win);
+  win.on("minimize" as any, (event: { preventDefault(): void }) => {
+    event.preventDefault();
+    win.hide();
+  });
+  win.on("closed", () => {
+    windows.delete(win);
+    mainWindows.delete(win);
+  });
   const query = new URLSearchParams();
   if (workspaceId) query.set("workspaceId", workspaceId);
   if (threadId) query.set("threadId", threadId);
@@ -3196,7 +3275,129 @@ function createWindow(workspaceId?: string, threadId?: string) {
   }
 }
 
-app.whenReady().then(() => {
+function applyPortalWindowPin(win: BrowserWindow, pinned: boolean) {
+  if (process.platform === "darwin") {
+    win.setAlwaysOnTop(pinned, pinned ? "screen-saver" : "normal");
+    win.setVisibleOnAllWorkspaces(pinned, { visibleOnFullScreen: pinned });
+  } else {
+    win.setAlwaysOnTop(pinned);
+  }
+  if (pinned) win.moveTop();
+}
+
+function createPortalWindow() {
+  if (portalWindow && !portalWindow.isDestroyed()) return portalWindow;
+
+  const win = new BrowserWindow({
+    width: 720,
+    height: 360,
+    minWidth: 560,
+    minHeight: 220,
+    title: "Any Jumper Portal",
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    hasShadow: false,
+    alwaysOnTop: portalWindowPinned,
+    skipTaskbar: true,
+    resizable: true,
+    movable: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(mainDir, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+  portalWindow = win;
+  applyPortalWindowPin(win, portalWindowPinned);
+  windows.add(win);
+  win.on("closed", () => {
+    windows.delete(win);
+    if (portalWindow === win) portalWindow = undefined;
+  });
+
+  const query = new URLSearchParams();
+  query.set("portal", "capsule");
+  if (process.env.VITE_DEV_SERVER_URL || !app.isPackaged) {
+    void win.loadURL(`${DEV_URL}?${query}`);
+  } else {
+    void win.loadFile(path.join(mainDir, "../dist/index.html"), { query: Object.fromEntries(query) });
+  }
+  return win;
+}
+
+function showPortalWindow() {
+  const win = portalWindow && !portalWindow.isDestroyed()
+    ? portalWindow
+    : createPortalWindow();
+  if (win.isVisible() && win.isFocused()) {
+    win.hide();
+    return;
+  }
+  win.center();
+  activatingPortalWindow = true;
+  win.show();
+  if (portalWindowPinned) {
+    win.setAlwaysOnTop(true, "screen-saver");
+    win.moveTop();
+  }
+  win.focus();
+  setTimeout(() => {
+    activatingPortalWindow = false;
+  }, 250);
+}
+
+function hidePortalWindow() {
+  if (portalWindow && !portalWindow.isDestroyed()) {
+    portalWindow.hide();
+  }
+}
+
+function setPortalWindowAlwaysOnTop(pinned: boolean) {
+  portalWindowPinned = pinned;
+  if (portalWindow && !portalWindow.isDestroyed()) {
+    applyPortalWindowPin(portalWindow, pinned);
+  }
+  return pinned;
+}
+
+function findMainWindow() {
+  return Array.from(mainWindows).find((win) => !win.isDestroyed());
+}
+
+function focusMainWindow() {
+  const win = findMainWindow();
+  if (!win) return false;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  return true;
+}
+
+function toggleMainWindow() {
+  const visibleMainWindows = Array.from(mainWindows)
+    .filter((win) => !win.isDestroyed() && win.isVisible());
+  if (visibleMainWindows.length > 0) {
+    for (const win of visibleMainWindows) win.hide();
+    return;
+  }
+  if (!focusMainWindow()) createWindow();
+}
+
+function shouldSkipMainActivation() {
+  return activatingPortalWindow ||
+    Boolean(portalWindow && !portalWindow.isDestroyed() && portalWindow.isFocused());
+}
+
+if (gotSingleInstanceLock) {
+  app.on("second-instance", () => {
+    if (!focusMainWindow()) createWindow();
+  });
+}
+
+if (gotSingleInstanceLock) app.whenReady().then(() => {
   storage = new StorageService(app.getPath("userData"));
   secrets = new SecretService(app.getPath("userData"));
   settings = new SettingsService(app.getPath("userData"));
@@ -3209,9 +3410,11 @@ app.whenReady().then(() => {
     agentBridge.addLog("error", "Agent Bridge 服务启动失败", error instanceof Error ? error.message : String(error));
   });
   registerIpcHandlers();
+  registerGlobalShortcuts();
   createWindow();
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (shouldSkipMainActivation()) return;
+    if (!focusMainWindow()) createWindow();
   });
 });
 
@@ -3220,5 +3423,6 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  globalShortcut.unregisterAll();
   void agentBridge?.stop();
 });
