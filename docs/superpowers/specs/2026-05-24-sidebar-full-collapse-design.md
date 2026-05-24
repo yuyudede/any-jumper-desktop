@@ -11,10 +11,11 @@ Any Jumper Desktop 当前的 Agent 页面在左侧栏收起后仍保留 60px 的
 ## 目标
 
 - 左侧栏收起后不再渲染或显示 mini rail。
-- 收起状态不再保留 60px 侧栏列，主内容区直接占满可用宽度。
+- 收起状态不再保留 60px 功能侧栏列，主内容区在避开 macOS 红绿灯安全区后占满可用宽度。
 - 顶部状态栏中的左侧栏按钮继续作为展开入口。
 - 展开状态保留现有侧栏内容、宽度和拖拽调整能力。
 - 紧凑窗口下也不再自动降级为 mini rail。
+- 收起后会话主题、状态 pill 和模型信息不得与 macOS 红绿灯按钮重叠。
 
 ## 非目标
 
@@ -29,9 +30,10 @@ Any Jumper Desktop 当前的 Agent 页面在左侧栏收起后仍保留 60px 的
 
 收起状态变化为完全隐藏左侧栏：
 
-- 左侧栏所在 grid 列不占宽度。
+- 不显示左侧功能侧栏和 mini rail。
+- 保留 `--window-control-safe-width` 作为左上角系统窗口控制安全留白；这个留白只用于避开红绿灯，不承载任何侧栏入口。
 - 侧栏 resize handle 不显示。
-- 主内容区从窗口安全区之后直接铺开。
+- 主内容区从窗口安全区之后直接铺开，确保会话主题第一行不会进入红绿灯按钮区域。
 - 用户通过顶部状态栏的 `PanelLeftOpen` 按钮展开侧栏。
 
 紧凑窗口下不再强制显示 60px mini rail。窗口变窄时，侧栏收起行为仍与桌面宽屏一致；已展开的侧栏按现有响应式规则处理，但不会产生新的窄栏模式。
@@ -46,8 +48,9 @@ Any Jumper Desktop 当前的 Agent 页面在左侧栏收起后仍保留 60px 的
 
 `src/styles/theme.css`：
 
-- `.agent-workbench.is-sidebar-collapsed` 的列定义改为左侧栏零宽或只保留 macOS window-control 安全区后的内容列。
+- `.agent-workbench.is-sidebar-collapsed` 的列定义改为 `var(--window-control-safe-width) minmax(0, 1fr)` 或等价布局：左列只作为 macOS window-control 安全区，不显示侧栏内容。
 - 折叠状态下 `.agent-sidebar` 隐藏，不参与布局、不接收交互。
+- 折叠状态下 `.agent-status-strip` / `.agent-status-copy` 需要保持在安全区右侧，避免标题、运行状态 badge、模型 meta 与红绿灯重叠。
 - 删除 `.agent-mini-rail*` 相关样式与 tooltip 样式。
 - 更新 `@media (max-width: 1180px)` 中对 mini rail 的强制显示规则，避免紧凑窗口继续保留窄栏。
 
@@ -62,6 +65,7 @@ Any Jumper Desktop 当前的 Agent 页面在左侧栏收起后仍保留 60px 的
 
 - 折叠状态不包含 `60px` 侧栏列。
 - 折叠状态不渲染 mini rail。
+- 折叠状态仍保留 `--window-control-safe-width`，并验证标题区域不会压到 macOS 红绿灯安全区。
 - 折叠时不渲染 resize handle。
 - 展开按钮仍显示正确 icon、label 和 `aria-pressed`。
 - 紧凑窗口样式不再强制显示 mini rail。
