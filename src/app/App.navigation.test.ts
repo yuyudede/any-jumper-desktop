@@ -51,43 +51,29 @@ describe("App navigation shell", () => {
     expect(css).toContain("--agent-sidebar-width");
     expect(css).toContain("--window-control-height");
     expect(css).toContain("--window-control-safe-width");
+    expect(css).toContain("--window-control-safe-width: 72px;");
     expect(css).toContain("width: var(--window-control-safe-width);");
     expect(css).toContain(".agent-status-strip");
     expect(css).toContain("-webkit-app-region: no-drag");
   });
 
-  it("shows an inactive traffic-light placeholder when the window loses focus", () => {
+  it("uses the native inactive traffic lights without drawing a duplicate overlay", () => {
     const appSource = readProjectFile("src/app/App.tsx");
     const electronSource = readProjectFile("electron/main.ts");
     const css = readProjectFile("src/styles/theme.css");
 
-    expect(electronSource).toContain("trafficLightPosition: { x: 20, y: 20 }");
-    expect(css).toContain("--window-control-x: 20px;");
+    expect(electronSource).toContain("trafficLightPosition: { x: 16, y: 20 }");
+    expect(css).toContain("--window-control-safe-width: 72px;");
+    expect(css).toContain("--window-control-x: 16px;");
     expect(css).toContain("--window-control-y: 20px;");
-    expect(css).toContain("--window-control-dot-size: 12px;");
-    expect(css).toContain("--window-control-dot-gap: 8px;");
-    expect(appSource).toContain("isWindowFocused");
-    expect(appSource).toContain("is-window-inactive");
-    expect(appSource).toContain("app-traffic-lights-placeholder");
-    expect(appSource).toContain('window.addEventListener("blur"');
-    expect(appSource).toContain('window.addEventListener("focus"');
-    expect(css).toContain(".app-traffic-lights-placeholder");
-    expect(css).toContain(".app-shell.is-window-inactive .app-traffic-lights-placeholder");
-    const placeholderBlock = css.match(/\.app-traffic-lights-placeholder\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
-    expect(placeholderBlock).toContain("top: var(--window-control-y);");
-    expect(placeholderBlock).toContain("left: var(--window-control-x);");
-    expect(placeholderBlock).toContain("width: calc(var(--window-control-dot-size) * 3 + var(--window-control-dot-gap) * 2);");
-    expect(placeholderBlock).toContain("height: var(--window-control-dot-size);");
-    expect(placeholderBlock).toContain("gap: var(--window-control-dot-gap);");
-    expect(placeholderBlock).toContain("background: transparent;");
-    expect(placeholderBlock).toContain("box-shadow: none;");
-    expect(placeholderBlock).not.toContain("border-radius: 999px;");
-    const dotBlock = css.match(/\.app-traffic-lights-placeholder span\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
-    expect(dotBlock).toContain("width: var(--window-control-dot-size);");
-    expect(dotBlock).toContain("height: var(--window-control-dot-size);");
-    expect(dotBlock).toContain("flex: 0 0 var(--window-control-dot-size);");
-    expect(css).toContain("background: var(--window-control-inactive-dot);");
-    expect(dotBlock).toContain("box-shadow: none;");
+    expect(appSource).not.toContain("isWindowFocused");
+    expect(appSource).not.toContain("is-window-inactive");
+    expect(appSource).not.toContain("app-traffic-lights-placeholder");
+    expect(appSource).not.toContain('window.addEventListener("blur"');
+    expect(appSource).not.toContain('window.addEventListener("focus"');
+    expect(css).not.toContain(".app-traffic-lights-placeholder");
+    expect(css).not.toContain(".app-shell.is-window-inactive");
+    expect(css).not.toContain("--window-control-inactive-dot");
   });
 
   it("keeps the agent side controls outside the macOS window controls", () => {
@@ -116,7 +102,7 @@ describe("App navigation shell", () => {
     expect(source).toContain("agent-sidebar-theme-toggle");
     expect(source).toContain("agent-corner-theme-toggle");
     expect(css).toContain("--window-control-safe-width");
-    expect(css).toContain("padding-left: calc(var(--window-control-safe-width) + 12px);");
+    expect(css).not.toContain("padding-left: calc(var(--window-control-safe-width) + 12px);");
     expect(css).not.toContain(".agent-topbar");
     expect(css).not.toContain("--agent-sidebar-toggle-offset");
   });

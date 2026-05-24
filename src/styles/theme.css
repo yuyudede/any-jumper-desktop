@@ -66,13 +66,13 @@
   --rim-highlight-strong: 0 1px 0 rgba(255, 255, 255, 0.96) inset;
   --scroll-minimap-glass-bg:
     radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.36), transparent 32%),
-    radial-gradient(circle at 86% 96%, rgba(190, 207, 222, 0.13), transparent 42%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.17) 0%, rgba(236, 243, 249, 0.09) 100%);
-  --scroll-minimap-glass-border: rgba(255, 255, 255, 0.54);
-  --scroll-minimap-glass-inner: rgba(255, 255, 255, 0.66);
-  --scroll-minimap-glass-shadow: rgba(34, 38, 42, 0.10);
-  --scroll-minimap-glass-text: rgba(24, 26, 28, 0.92);
-  --scroll-minimap-glass-muted: rgba(36, 40, 43, 0.66);
+    radial-gradient(circle at 88% 98%, rgba(190, 207, 222, 0.07), transparent 42%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.42) 0%, rgba(242, 246, 250, 0.31) 100%);
+  --scroll-minimap-glass-border: rgba(255, 255, 255, 0.46);
+  --scroll-minimap-glass-inner: rgba(255, 255, 255, 0.50);
+  --scroll-minimap-glass-shadow: rgba(34, 38, 42, 0.13);
+  --scroll-minimap-glass-text: rgba(20, 22, 24, 0.96);
+  --scroll-minimap-glass-muted: rgba(31, 35, 38, 0.72);
   --scroll-minimap-glass-hover: rgba(255, 255, 255, 0.15);
   --shadow-soft: 0 20px 50px rgba(24, 24, 22, 0.09);
   --app-chrome-bg: #e6e4e0;
@@ -82,17 +82,15 @@
   --agent-panel-radius: 22px;
   --agent-control-radius: 12px;
   --agent-status-strip-height: 78px;
+  --agent-bottom-dock-height: 142px;
   --agent-right-panel-tabbar-height: 34px;
   --agent-right-panel-toolbar-height: calc(var(--agent-status-strip-height) - var(--agent-right-panel-tabbar-height));
   --accent-warm: #b79a91;
   --agent-sidebar-width: 284px;
   --window-control-height: 52px;
-  --window-control-safe-width: 104px;
-  --window-control-x: 20px;
+  --window-control-safe-width: 72px;
+  --window-control-x: 16px;
   --window-control-y: 20px;
-  --window-control-dot-size: 12px;
-  --window-control-dot-gap: 8px;
-  --window-control-inactive-dot: rgba(255, 255, 255, 0.96);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -162,7 +160,6 @@
     --app-chrome-bg: #0d0e0f;
     --agent-gutter: #101113;
     --accent-warm: #c5a79d;
-    --window-control-inactive-dot: rgba(255, 255, 255, 0.78);
   }
 }
 
@@ -218,19 +215,18 @@
   --rim-highlight-strong: 0 1px 0 rgba(255, 255, 255, 0.96) inset;
   --scroll-minimap-glass-bg:
     radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.36), transparent 32%),
-    radial-gradient(circle at 86% 96%, rgba(190, 207, 222, 0.13), transparent 42%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.17) 0%, rgba(236, 243, 249, 0.09) 100%);
-  --scroll-minimap-glass-border: rgba(255, 255, 255, 0.54);
-  --scroll-minimap-glass-inner: rgba(255, 255, 255, 0.66);
-  --scroll-minimap-glass-shadow: rgba(34, 38, 42, 0.10);
-  --scroll-minimap-glass-text: rgba(24, 26, 28, 0.92);
-  --scroll-minimap-glass-muted: rgba(36, 40, 43, 0.66);
+    radial-gradient(circle at 88% 98%, rgba(190, 207, 222, 0.07), transparent 42%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.42) 0%, rgba(242, 246, 250, 0.31) 100%);
+  --scroll-minimap-glass-border: rgba(255, 255, 255, 0.46);
+  --scroll-minimap-glass-inner: rgba(255, 255, 255, 0.50);
+  --scroll-minimap-glass-shadow: rgba(34, 38, 42, 0.13);
+  --scroll-minimap-glass-text: rgba(20, 22, 24, 0.96);
+  --scroll-minimap-glass-muted: rgba(31, 35, 38, 0.72);
   --scroll-minimap-glass-hover: rgba(255, 255, 255, 0.15);
   --shadow-soft: 0 20px 50px rgba(24, 24, 22, 0.09);
   --app-chrome-bg: #e6e4e0;
   --agent-gutter: #dedbd6;
   --accent-warm: #b79a91;
-  --window-control-inactive-dot: rgba(255, 255, 255, 0.96);
 }
 
 :root[data-theme="dark"] {
@@ -302,7 +298,6 @@
   --app-chrome-bg: #0d0e0f;
   --agent-gutter: #101113;
   --accent-warm: #c5a79d;
-  --window-control-inactive-dot: rgba(255, 255, 255, 0.78);
 }
 
 
@@ -378,35 +373,6 @@ select {
   -webkit-app-region: drag;
   user-select: none;
   pointer-events: auto;
-}
-
-.app-traffic-lights-placeholder {
-  position: absolute;
-  top: var(--window-control-y);
-  left: var(--window-control-x);
-  display: none;
-  align-items: center;
-  width: calc(var(--window-control-dot-size) * 3 + var(--window-control-dot-gap) * 2);
-  height: var(--window-control-dot-size);
-  padding: 0;
-  gap: var(--window-control-dot-gap);
-  background: transparent;
-  box-shadow: none;
-  pointer-events: none;
-  -webkit-app-region: drag;
-}
-
-.app-traffic-lights-placeholder span {
-  width: var(--window-control-dot-size);
-  height: var(--window-control-dot-size);
-  flex: 0 0 var(--window-control-dot-size);
-  border-radius: 50%;
-  background: var(--window-control-inactive-dot);
-  box-shadow: none;
-}
-
-.app-shell.is-window-inactive .app-traffic-lights-placeholder {
-  display: flex;
 }
 
 .side-nav {
@@ -1216,16 +1182,12 @@ select {
 }
 
 .agent-workbench.is-sidebar-collapsed {
-  grid-template-columns: 60px minmax(0, 1fr);
+  grid-template-columns: max(60px, var(--window-control-safe-width)) minmax(0, 1fr);
 }
 
 .agent-workbench.is-sidebar-collapsed .agent-sidebar {
   padding: calc(var(--window-control-height) + 10px) 6px 14px;
   overflow: visible;
-}
-
-.agent-workbench.is-sidebar-collapsed .agent-status-strip {
-  padding-left: calc(var(--window-control-safe-width) + 12px);
 }
 
 .agent-sidebar {
@@ -1245,6 +1207,17 @@ select {
 
 .agent-content-row.has-right-panel {
   grid-template-columns: minmax(0, 1fr) 6px var(--agent-right-panel-width);
+}
+
+.agent-content-row.is-right-panel-layout-frozen {
+  grid-template-columns: var(--agent-main-freeze-width);
+  width: var(--agent-main-freeze-width);
+  justify-self: start;
+}
+
+.agent-content-row.has-right-panel.is-right-panel-layout-frozen {
+  grid-template-columns: var(--agent-main-freeze-width) 6px var(--agent-right-panel-width);
+  width: calc(var(--agent-main-freeze-width) + 6px + var(--agent-right-panel-width));
 }
 
 .agent-content-row > .agent-main {
@@ -1405,7 +1378,7 @@ select {
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .agent-right-panel-git-bar {
@@ -1416,6 +1389,15 @@ select {
   border-bottom: 1px solid var(--line);
   font-size: 13px;
   flex-shrink: 0;
+}
+
+.git-branch-toggle {
+  width: 26px;
+}
+
+.git-branch-toggle.is-active {
+  color: var(--text);
+  background: var(--side-hover);
 }
 
 .agent-right-panel-commit-form {
@@ -1539,6 +1521,254 @@ select {
   color: var(--danger);
 }
 
+.git-change-scroll-area {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 6px 0 10px;
+}
+
+.git-change-tree,
+.git-change-tree-children {
+  display: flex;
+  flex-direction: column;
+}
+
+.git-change-tree {
+  padding: 2px 0;
+}
+
+.git-change-tree-node {
+  min-width: 0;
+}
+
+.git-change-tree-dir {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.git-change-tree-dir:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.git-change-tree-chevron {
+  flex: 0 0 auto;
+  transition: transform 0.16s ease;
+}
+
+.git-change-tree-chevron.is-collapsed {
+  transform: rotate(-90deg);
+}
+
+.git-change-tree-icon {
+  flex: 0 0 auto;
+}
+
+.git-change-tree-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-change-tree-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.git-change-tree-file {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 30px;
+  padding-right: 8px;
+}
+
+.git-change-tree-file:hover {
+  background: var(--hover);
+}
+
+.git-change-tree-file .git-change-file-main {
+  min-width: 0;
+  padding: 5px 6px 5px 0;
+}
+
+.git-change-tree-actions {
+  display: flex;
+  flex: 0 0 auto;
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+
+.git-change-tree-file:hover .git-change-tree-actions,
+.git-change-tree-file:focus-within .git-change-tree-actions {
+  opacity: 1;
+}
+
+.git-change-status {
+  flex: 0 0 auto;
+  margin-left: 4px;
+  font-size: 10px;
+}
+
+.git-change-status.is-modified,
+.git-change-status.is-untracked {
+  color: var(--warning);
+}
+
+.git-change-status.is-added {
+  color: var(--success);
+}
+
+.git-change-status.is-deleted {
+  color: var(--danger);
+}
+
+.git-change-status.is-renamed {
+  color: var(--accent);
+}
+
+.git-change-status.is-changed {
+  color: var(--muted);
+}
+
+.git-change-tree-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.git-branch-panel {
+  display: flex;
+  flex: 0 0 var(--agent-bottom-dock-height);
+  flex-direction: column;
+  min-height: 0;
+  margin: 0;
+  padding: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-right: none;
+  border-bottom: none;
+  border-left: none;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--panel) 86%, var(--side-hover));
+}
+
+.git-branch-panel-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.git-branch-panel-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.git-branch-panel-kicker,
+.git-branch-panel-title {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.git-branch-panel-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.git-branch-panel-title {
+  margin-top: 10px;
+  margin-bottom: 6px;
+}
+
+.git-branch-panel-branch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.git-branch-panel-branch > span:not(.git-status-badge) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-recent-commit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 0;
+}
+
+.git-recent-commit {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 7px;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.git-recent-commit-hash {
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.git-recent-commit-subject {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-recent-commit-ref {
+  grid-column: 2;
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-branch-panel-empty {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 /* Git commit bar */
 .git-commit-bar {
   display: flex;
@@ -1657,6 +1887,17 @@ select {
 
 .agent-content-row.has-right-panel {
   grid-template-columns: minmax(0, 1fr) 6px var(--agent-right-panel-width);
+}
+
+.agent-content-row.is-right-panel-layout-frozen {
+  grid-template-columns: var(--agent-main-freeze-width);
+  width: var(--agent-main-freeze-width);
+  justify-self: start;
+}
+
+.agent-content-row.has-right-panel.is-right-panel-layout-frozen {
+  grid-template-columns: var(--agent-main-freeze-width) 6px var(--agent-right-panel-width);
+  width: calc(var(--agent-main-freeze-width) + 6px + var(--agent-right-panel-width));
 }
 
 .agent-content-row > .agent-main {
@@ -1817,7 +2058,7 @@ select {
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .agent-right-panel-git-bar {
@@ -3605,8 +3846,28 @@ select {
 
 .turn-trace-jump-to-latest {
   position: absolute;
-  right: 14px;
+  right: auto;
   bottom: 12px;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-color: var(--line-strong);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  color: var(--text);
+  transform: translateX(-50%);
+}
+
+.turn-trace-jump-to-latest:hover {
+  transform: translateX(-50%) translateY(-1px);
+}
+
+.turn-trace-jump-icon {
+  flex: 0 0 auto;
 }
 
 .turn-trace-current {
@@ -5053,13 +5314,13 @@ pre:last-child {
   border-radius: 22px;
   background: var(--scroll-minimap-glass-bg);
   color: var(--scroll-minimap-glass-text);
-  backdrop-filter: blur(18px) saturate(180%) contrast(110%) brightness(105%);
-  -webkit-backdrop-filter: blur(18px) saturate(180%) contrast(110%) brightness(105%);
+  backdrop-filter: blur(26px) saturate(150%) contrast(104%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%) contrast(104%);
   box-shadow:
     0 24px 64px var(--scroll-minimap-glass-shadow),
-    0 16px 40px rgba(255, 255, 255, 0.12) inset,
-    0 2px 10px rgba(255, 255, 255, 0.24) inset,
-    0 0 0 1px rgba(255, 255, 255, 0.22) inset;
+    0 12px 34px rgba(255, 255, 255, 0.10) inset,
+    0 2px 10px rgba(255, 255, 255, 0.20) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.20) inset;
 }
 
 .scroll-minimap-panel::before {
@@ -5070,32 +5331,19 @@ pre:last-child {
   border-radius: inherit;
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 40%),
-    radial-gradient(circle at 86% 100%, rgba(255, 255, 255, 0.12), transparent 38%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.10), transparent 42%),
+    radial-gradient(circle at 86% 100%, rgba(255, 255, 255, 0.06), transparent 38%);
   box-shadow: inset 0 1px 0 var(--scroll-minimap-glass-inner);
-}
-
-.scroll-minimap-panel::after {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  z-index: 0;
-  border-radius: 21px;
-  pointer-events: none;
-  background:
-    linear-gradient(120deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.10) 18%, transparent 38%),
-    linear-gradient(300deg, transparent 52%, rgba(255, 255, 255, 0.20) 61%, transparent 70%);
-  opacity: 0.82;
 }
 
 .scroll-minimap-panel > * {
   position: relative;
-  z-index: 2;
+  z-index: 1;
 }
 
 .scroll-minimap-panel-header {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .scroll-minimap-panel-icon,
@@ -5181,11 +5429,11 @@ pre:last-child {
   }
 
   .agent-workbench {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: var(--window-control-safe-width) minmax(0, 1fr);
   }
 
   .agent-workbench.is-sidebar-collapsed {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: var(--window-control-safe-width) minmax(0, 1fr);
   }
 
   .agent-content-row.has-right-panel {
@@ -5193,10 +5441,22 @@ pre:last-child {
   }
 
   .agent-sidebar {
+    display: flex;
+    padding-inline: 10px;
+  }
+  .agent-mini-rail {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .agent-sidebar > *:not(.agent-mini-rail) {
+    display: none;
+  }
+  .resize-handle-h {
     display: none;
   }
   .agent-corner-theme-toggle {
-    display: inline-flex;
+    display: none;
   }
   .agent-right-panel {
     display: none;
@@ -5218,12 +5478,12 @@ pre:last-child {
   }
 
   .agent-workbench {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: var(--window-control-safe-width) minmax(0, 1fr);
     height: 100%;
   }
 
   .agent-sidebar {
-    display: none;
+    display: flex;
   }
 
   .transcript {
@@ -5812,6 +6072,7 @@ pre:last-child {
   display: flex;
   position: relative;
   isolation: isolate;
+  --agent-empty-action-delay: 0s;
   width: min(620px, 100%);
   min-height: 52vh;
   align-self: center;
@@ -5853,6 +6114,9 @@ pre:last-child {
   -webkit-backdrop-filter: blur(12px);
   color: var(--text);
   box-shadow: var(--shadow-elevation-2);
+  transform-origin: center;
+  animation: agent-empty-icon-breathe 4.8s ease-in-out 0.72s infinite;
+  will-change: transform, box-shadow;
 }
 
 .agent-empty-state-icon::before {
@@ -5877,6 +6141,7 @@ pre:last-child {
   font-weight: var(--font-weight-heading);
   line-height: 1.08;
   letter-spacing: 0;
+  animation: agent-empty-copy-rise 0.48s cubic-bezier(0.2, 0.8, 0.2, 1) 0.08s both;
 }
 
 .agent-empty-state-copy p {
@@ -5886,6 +6151,7 @@ pre:last-child {
   font-size: 13.5px;
   line-height: 1.6;
   letter-spacing: -0.004em;
+  animation: agent-empty-copy-rise 0.48s cubic-bezier(0.2, 0.8, 0.2, 1) 0.14s both;
 }
 
 .agent-empty-state-actions {
@@ -5895,6 +6161,7 @@ pre:last-child {
 }
 
 .agent-empty-state-actions .shadcn-button {
+  --agent-empty-action-delay: 0.2s;
   background: color-mix(in srgb, var(--surface-glass) 84%, var(--panel));
   box-shadow:
     var(--shadow-elevation-2),
@@ -5906,7 +6173,7 @@ pre:last-child {
     background 0.16s ease,
     box-shadow 0.16s ease,
     transform 0.16s ease;
-  animation: agent-empty-rise 0.52s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: agent-empty-action-rise 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) var(--agent-empty-action-delay) both;
 }
 
 .agent-empty-state-actions .shadcn-button-default {
@@ -5922,11 +6189,11 @@ pre:last-child {
 }
 
 .agent-empty-state-actions .shadcn-button:nth-child(2) {
-  animation-delay: 0.04s;
+  --agent-empty-action-delay: 0.26s;
 }
 
 .agent-empty-state-actions .shadcn-button:nth-child(3) {
-  animation-delay: 0.08s;
+  --agent-empty-action-delay: 0.32s;
 }
 
 .agent-empty-state-actions .shadcn-button:hover,
@@ -6850,6 +7117,43 @@ pre:last-child {
   }
 }
 
+@keyframes agent-empty-copy-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes agent-empty-action-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes agent-empty-icon-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+    box-shadow: var(--shadow-elevation-2);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.015);
+    box-shadow:
+      0 1px 2px rgba(24, 24, 22, 0.06),
+      0 6px 12px rgba(24, 24, 22, 0.08),
+      0 18px 34px rgba(24, 24, 22, 0.12);
+  }
+}
+
 @keyframes shadcn-spin {
   to { transform: rotate(360deg); }
 }
@@ -6862,6 +7166,15 @@ pre:last-child {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+
+  .agent-empty-state,
+  .agent-empty-state-icon,
+  .agent-empty-state-copy h2,
+  .agent-empty-state-copy p,
+  .agent-empty-state-actions .shadcn-button {
+    animation: none !important;
+    transform: none !important;
   }
 }
 

@@ -51,6 +51,7 @@ import { extractModelOutputParts, stripExposedThinking } from "../src/utils/mode
 import { truncateTraceThoughtText } from "../src/utils/traceThoughtText";
 import { TurnOutputClassifier, type TurnOutputSegment } from "../src/utils/turnOutputClassifier";
 import { AgentBridgeService } from "./agentBridge";
+import { enableDeepSeekReasoningRoundTrip } from "../src/utils/deepseekReasoningRoundTrip";
 import {
   classifyToolKind,
   createToolSummary,
@@ -1826,7 +1827,7 @@ function createChatModel(config: ModelConfig, model: string, reasoningEffort?: s
   }
   const apiKey = secrets.get(`ai-model-api-key-${config.id}`);
   if (!apiKey) throw new AppError("TOKEN_MISSING", "请先在模型设置中配置 OpenAI-compatible API Key");
-  return new ChatOpenAI({
+  const chatModel = new ChatOpenAI({
     model,
     apiKey,
     streaming: true,
@@ -1835,6 +1836,9 @@ function createChatModel(config: ModelConfig, model: string, reasoningEffort?: s
     reasoning: shouldUseOpenAIResponsesApi(model) ? openAIReasoningOptions(reasoningEffort) : undefined,
     useResponsesApi: shouldUseOpenAIResponsesApi(model),
   } as any);
+  return isDeepSeekOpenAICompatible(config, model)
+    ? enableDeepSeekReasoningRoundTrip(chatModel as any)
+    : chatModel;
 }
 
 function openAIReasoningOptions(reasoningEffort?: string) {
@@ -1847,6 +1851,12 @@ function openAIReasoningOptions(reasoningEffort?: string) {
 function shouldUseOpenAIResponsesApi(model: string) {
   const value = model.toLowerCase();
   return /^(o[1-9]|gpt-5|computer-use-preview|codex-)/.test(value);
+}
+
+function isDeepSeekOpenAICompatible(config: ModelConfig, model: string) {
+  if (config.providerKind !== "openai-compatible") return false;
+  const host = safeUrl(config.baseUrl)?.hostname.toLowerCase() || "";
+  return isDeepSeekHost(host) || model.toLowerCase().includes("deepseek");
 }
 
 function anthropicThinkingOptions(model: string, reasoningEffort?: string) {
@@ -1937,13 +1947,13 @@ function isDeepSeekHost(host: string) {
 function modelVisibleMessages(threadId: string) {
   const items: AgentItem[] = storage.readThread(threadId).items;
   return items
-    .filter((item) => !item.hidden && item.itemType === "message" && (item.content.trim() || (item.images && item.images.length > 0)))
+    .filter((item) => !item.hidden && item.itemType === "message" && (item.content.trim() || item.reasoningContent !== undefined || (item.images && item.images.length > 0)))
     .slice(-20)
     .map((item) => {
       if (!item.images || item.images.length === 0) {
         if (item.role === "assistant") {
           const messageOptions: any = { content: item.content };
-          if (item.reasoningContent) {
+          if (item.reasoningContent !== undefined) {
             messageOptions.additional_kwargs = { reasoning_content: item.reasoningContent };
           }
           return new AIMessage(messageOptions);
@@ -3163,7 +3173,7 @@ function createWindow(workspaceId?: string, threadId?: string) {
     title: "Any Jumper Desktop",
     frame: false,
     titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 20, y: 20 },
+    trafficLightPosition: { x: 16, y: 20 },
     transparent: true,
     backgroundColor: "#00000000",
     hasShadow: false,

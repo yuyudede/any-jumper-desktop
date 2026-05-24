@@ -81,29 +81,27 @@ describe("AgentPage transcript message layout", () => {
       ?.groups?.body ?? "";
     const panelBeforeBlock = css.match(/(?:^|\n)\.scroll-minimap-panel::before\s*\{(?<body>[^}]*)\}/)
       ?.groups?.body ?? "";
-    const panelAfterBlock = css.match(/(?:^|\n)\.scroll-minimap-panel::after\s*\{(?<body>[^}]*)\}/)
-      ?.groups?.body ?? "";
 
     expect(css).toContain("--scroll-minimap-glass-bg:");
     expect(css).toContain("--scroll-minimap-glass-border:");
-    expect(css).toContain("rgba(255, 255, 255, 0.17)");
-    expect(css).toContain("rgba(236, 243, 249, 0.09)");
-    expect(css).toContain("rgba(190, 207, 222, 0.13)");
+    expect(css).toContain("rgba(255, 255, 255, 0.42)");
+    expect(css).toContain("rgba(242, 246, 250, 0.31)");
+    expect(css).toContain("rgba(190, 207, 222, 0.07)");
     expect(css).not.toContain("rgba(160, 168, 172, 0.58)");
     expect(css).not.toContain("rgba(132, 140, 145, 0.50)");
     expect(css).not.toContain("rgba(106, 146, 178, 0.82)");
     expect(css).not.toContain("rgba(65, 105, 136, 0.76)");
     expect(panelBlock).toContain("background: var(--scroll-minimap-glass-bg);");
-    expect(panelBlock).toContain("backdrop-filter: blur(18px) saturate(180%) contrast(110%) brightness(105%);");
+    expect(panelBlock).toContain("backdrop-filter: blur(26px) saturate(150%) contrast(104%);");
     expect(panelBlock).toContain("border-radius: 22px;");
     expect(panelBlock).toContain("border: 1px solid var(--scroll-minimap-glass-border);");
     expect(panelBlock).toContain("box-shadow:");
     expect(panelBlock).toContain("overflow: hidden;");
     expect(panelBeforeBlock).toContain("background:");
     expect(panelBeforeBlock).toContain("box-shadow: inset 0 1px 0 var(--scroll-minimap-glass-inner);");
-    expect(panelAfterBlock).toContain("linear-gradient(120deg");
-    expect(panelAfterBlock).toContain("linear-gradient(300deg");
-    expect(panelAfterBlock).toContain("opacity: 0.82;");
+    expect(css).not.toContain(".scroll-minimap-panel::after");
+    expect(css).not.toContain("linear-gradient(120deg");
+    expect(css).not.toContain("linear-gradient(300deg");
   });
 
   it("keeps keyboard-selected slash command suggestions scrolled into view", () => {
@@ -221,6 +219,7 @@ describe("AgentPage transcript message layout", () => {
     const css = readProjectFile("src/styles/theme.css");
     const mainBeforeBlock = css.match(/\.agent-main::before\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const mainAfterBlock = css.match(/\.agent-main::after\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const reducedMotionBlock = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
 
     expect(source).toMatch(/Conversation[\s\S]*is-empty-home/);
     expect(css).toContain(".agent-main::before");
@@ -228,10 +227,15 @@ describe("AgentPage transcript message layout", () => {
     expect(css).toContain(".transcript.is-empty-home");
     expect(css).toContain(".agent-empty-state::before");
     expect(css).toContain("@keyframes agent-empty-rise");
+    expect(css).toContain("@keyframes agent-empty-icon-breathe");
+    expect(css).toContain("--agent-empty-action-delay");
     expect(css).toContain("animation: agent-empty-rise");
+    expect(css).toContain("animation: agent-empty-icon-breathe");
     expect(css).not.toContain("@keyframes agent-bg-drift");
     expect(mainBeforeBlock).not.toContain("animation:");
     expect(mainAfterBlock).not.toContain("animation:");
+    expect(reducedMotionBlock).toContain(".agent-empty-state-icon");
+    expect(reducedMotionBlock).toContain("animation: none !important;");
   });
 
   it("keeps the primary empty-state action legible on the soft home background", () => {
@@ -306,6 +310,10 @@ describe("AgentPage transcript message layout", () => {
       ?.groups?.body ?? "";
     const miniSpacerBlock = css.match(/(?:^|\n)\.agent-mini-rail-spacer\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const cornerButtonBlock = css.match(/(?:^|\n)\.agent-corner-theme-toggle\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const compactMedia = css.match(/@media\s*\(max-width:\s*1180px\)\s*\{(?<body>[\s\S]*?)@media\s*\(max-width:\s*760px\)/)
+      ?.groups?.body ?? "";
+    const compactCornerButtonBlock = compactMedia.match(/\.agent-corner-theme-toggle\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
 
     expect(source).toContain("agent-sidebar-foot-label");
     expect(source).toContain("agent-sidebar-foot-path");
@@ -336,7 +344,7 @@ describe("AgentPage transcript message layout", () => {
     expect(miniSpacerBlock).toContain("margin-top: auto;");
     expect(cornerButtonBlock).toContain("display: none;");
     expect(css).toContain("@media (max-width: 1180px)");
-    expect(css).toContain(".agent-corner-theme-toggle {\n    display: inline-flex;");
+    expect(compactCornerButtonBlock).toContain("display: none;");
   });
 
   it("uses a two-column workbench so the transcript and composer keep the main track", () => {
@@ -355,15 +363,26 @@ describe("AgentPage transcript message layout", () => {
     expect(composerLeftBlock).toContain("flex-wrap: wrap;");
   });
 
-  it("does not reserve an empty sidebar column after hiding the sidebar on compact windows", () => {
+  it("keeps a mini sidebar rail instead of hiding navigation on compact windows", () => {
     const css = readProjectFile("src/styles/theme.css");
     const compactMedia = css.match(/@media\s*\(max-width:\s*1180px\)\s*\{(?<body>[\s\S]*?)@media\s*\(max-width:\s*760px\)/)
       ?.groups?.body ?? "";
     const workbenchBlock = compactMedia.match(/\.agent-workbench\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const collapsedWorkbenchBlock = compactMedia.match(/\.agent-workbench\.is-sidebar-collapsed\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
     const sidebarBlock = compactMedia.match(/\.agent-sidebar\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const miniRailBlock = compactMedia.match(/\.agent-mini-rail\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const sidebarContentBlock = compactMedia.match(/\.agent-sidebar > \*:not\(\.agent-mini-rail\)\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+    const resizeHandleBlock = compactMedia.match(/\.resize-handle-h\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
 
-    expect(sidebarBlock).toContain("display: none;");
-    expect(workbenchBlock).toContain("grid-template-columns: minmax(0, 1fr);");
+    expect(sidebarBlock).toContain("display: flex;");
+    expect(miniRailBlock).toContain("display: flex;");
+    expect(sidebarContentBlock).toContain("display: none;");
+    expect(resizeHandleBlock).toContain("display: none;");
+    expect(css).toContain("--window-control-safe-width: 72px;");
+    expect(workbenchBlock).toContain("grid-template-columns: var(--window-control-safe-width) minmax(0, 1fr);");
+    expect(collapsedWorkbenchBlock).toContain("grid-template-columns: var(--window-control-safe-width) minmax(0, 1fr);");
     expect(workbenchBlock).not.toContain("var(--agent-sidebar-width)");
   });
 
@@ -374,7 +393,9 @@ describe("AgentPage transcript message layout", () => {
       ?.groups?.body ?? "";
 
     expect(source).toContain("{!sidebarCollapsed && (\n          <ResizeHandle onResize={handleSidebarResize} />\n        )}");
-    expect(collapsedWorkbenchBlock).toContain("grid-template-columns: 60px minmax(0, 1fr);");
+    expect(collapsedWorkbenchBlock).toContain(
+      "grid-template-columns: max(60px, var(--window-control-safe-width)) minmax(0, 1fr);",
+    );
     expect(collapsedWorkbenchBlock).not.toContain("60px auto minmax(560px, 1fr)");
   });
 
@@ -399,6 +420,10 @@ describe("AgentPage transcript message layout", () => {
     const contentRowBlock = css.match(/(?:^|\n)\.agent-content-row\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const contentRowWithPanelBlock = css.match(/(?:^|\n)\.agent-content-row\.has-right-panel\s*\{(?<body>[^}]*)\}/)
       ?.groups?.body ?? "";
+    const frozenRowBlock = css.match(/(?:^|\n)\.agent-content-row\.is-right-panel-layout-frozen\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+    const frozenRowWithPanelBlock = css.match(/(?:^|\n)\.agent-content-row\.has-right-panel\.is-right-panel-layout-frozen\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
     const mainBlock = css.match(/(?:^|\n)\.agent-content-row > \.agent-main\s*\{(?<body>[^}]*)\}/)
       ?.groups?.body ?? "";
     const resizeBlock = css.match(/(?:^|\n)\.agent-right-resize\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
@@ -408,15 +433,57 @@ describe("AgentPage transcript message layout", () => {
     expect(source).toContain("setRightPanelWidth(next);");
     expect(source).not.toContain("nextElementSibling as HTMLElement");
     expect(source).toContain("has-right-panel");
+    expect(source).toContain("rightPanelMainFreezeWidth");
+    expect(source).toContain("agentMainRef");
+    expect(source).toContain("agentMainRef.current?.getBoundingClientRect().width");
+    expect(source).toContain("is-right-panel-layout-frozen");
+    expect(source).toContain("--agent-main-freeze-width");
     expect(contentRowBlock).toContain("display: grid;");
     expect(contentRowBlock).toContain("grid-template-columns: minmax(0, 1fr);");
     expect(contentRowWithPanelBlock).toContain("grid-template-columns: minmax(0, 1fr) 6px var(--agent-right-panel-width);");
+    expect(frozenRowBlock).toContain("grid-template-columns: var(--agent-main-freeze-width);");
+    expect(frozenRowBlock).toContain("width: var(--agent-main-freeze-width);");
+    expect(frozenRowWithPanelBlock).toContain("grid-template-columns: var(--agent-main-freeze-width) 6px var(--agent-right-panel-width);");
+    expect(frozenRowWithPanelBlock).toContain("width: calc(var(--agent-main-freeze-width) + 6px + var(--agent-right-panel-width));");
     expect(mainBlock).toContain("min-width: 0;");
     expect(resizeBlock).not.toContain("position: absolute;");
     expect(resizeBlock).toContain("width: 6px;");
     expect(panelBlock).not.toContain("position: absolute;");
     expect(panelBlock).toContain("width: var(--agent-right-panel-width);");
     expect(panelBlock).toContain("min-width: 0;");
+  });
+
+  it("toggles the right commit history dock from the branch button and scrolls its contents", () => {
+    const panelSource = readProjectFile("src/components/RightPanel.tsx");
+    const css = readProjectFile("src/styles/theme.css");
+    const changesBlock = css.match(/(?:^|\n)\.agent-right-panel-changes\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const changeScrollBlock = css.match(/(?:^|\n)\.git-change-scroll-area\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const branchToggleBlock = css.match(/(?:^|\n)\.git-branch-toggle\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const branchPanelBlock = css.match(/(?:^|\n)\.git-branch-panel\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const branchContentBlock = css.match(/(?:^|\n)\.git-branch-panel-content\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+    const commitListBlock = css.match(/(?:^|\n)\.git-recent-commit-list\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+
+    expect(css).toContain("--agent-bottom-dock-height: 142px;");
+    expect(panelSource).toContain("commitLogPanelOpen");
+    expect(panelSource).toContain("handleCommitLogToggle");
+    expect(panelSource).toContain("git-branch-toggle");
+    expect(panelSource).toContain("aria-expanded={commitLogPanelOpen}");
+    expect(panelSource).toContain("commitLogPanelOpen ? gitBranchPanel : null");
+    expect(panelSource).not.toContain("gitBranchPanelCollapsed");
+    expect(panelSource).not.toContain("onToggleCollapsed");
+    expect(changesBlock).toContain("overflow: hidden;");
+    expect(changeScrollBlock).toContain("overflow-y: auto;");
+    expect(branchToggleBlock).toContain("width: 26px;");
+    expect(branchPanelBlock).toContain("display: flex;");
+    expect(branchPanelBlock).toContain("flex: 0 0 var(--agent-bottom-dock-height);");
+    expect(branchPanelBlock).toContain("flex-direction: column;");
+    expect(branchPanelBlock).toContain("overflow: hidden;");
+    expect(css).not.toContain(".git-branch-panel.is-collapsed");
+    expect(branchContentBlock).toContain("flex: 1 1 auto;");
+    expect(branchContentBlock).toContain("overflow-y: auto;");
+    expect(commitListBlock).toContain("min-height: 0;");
   });
 
   it("absorbs window right-edge resizing into the right panel width", () => {
@@ -431,14 +498,15 @@ describe("AgentPage transcript message layout", () => {
     expect(source).toContain("resizing={rightPanelResizing || rightPanelWindowResizing}");
   });
 
-  it("shrinks the host window when collapsing the right panel from the header toggle", () => {
+  it("expands and shrinks the host window when toggling the right panel from the header", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
     const desktopApiSource = readProjectFile("src/services/desktopApi.ts");
     const mainSource = readProjectFile("electron/main.ts");
 
     expect(source).toContain("const RIGHT_PANEL_RESIZER_WIDTH = 6;");
     expect(source).toContain("const handleRightPanelToggle = useCallback(() => {");
-    expect(source).toContain("desktopApi.resizeCurrentWindowByWidthDelta(-(rightPanelWidth + RIGHT_PANEL_RESIZER_WIDTH));");
+    expect(source).toContain("const panelResizeDelta = rightPanelWidth + RIGHT_PANEL_RESIZER_WIDTH;");
+    expect(source).toContain("desktopApi.resizeCurrentWindowByWidthDelta(next ? panelResizeDelta : -panelResizeDelta);");
     expect(source).toContain("rightPanelWindowResizeSuppressedRef");
     expect(source).toContain("onClick={handleRightPanelToggle}");
     expect(desktopApiSource).toContain("resizeCurrentWindowByWidthDelta(delta: number)");
@@ -496,6 +564,9 @@ describe("AgentPage transcript message layout", () => {
     expect(source).toContain("handleTraceScroll");
     expect(source).toContain("tracePinnedToBottom");
     expect(source).toContain("turn-trace-jump-to-latest");
+    expect(source).toContain('aria-label="跳到最新"');
+    expect(source).toContain('<ArrowDown className="turn-trace-jump-icon" size={22} />');
+    expect(source).not.toMatch(/<button[^>]*className="turn-trace-jump-to-latest"[\s\S]*?>\s*跳到最新\s*<\/button>/);
     expect(source).toContain("isNearScrollBottom");
     expect(source).toContain("scrollElementToBottom");
     expect(css).toContain(".turn-trace-jump-to-latest");
@@ -682,8 +753,8 @@ describe("AgentPage transcript message layout", () => {
     expect(source).toContain("handleOpenGeneratedFile");
     expect(source).toContain("rightPanelPreviewFile");
     expect(source).toContain("setRightPanelPreviewFile");
-    expect(source).toContain("setRightPanelOpen(true)");
-    expect(source).toContain('localStorage.setItem("any-jumper-right-panel-open", "true")');
+    expect(source).toContain("setRightPanelOpenWithWindowResize(true)");
+    expect(source).toContain('localStorage.setItem("any-jumper-right-panel-open", String(next))');
     expect(source).toContain("externalPreviewFile={rightPanelPreviewFile}");
     expect(source).not.toContain("setPreviewOpen(true)");
     expect(source).toContain("onFileOpen={handleOpenGeneratedFile}");

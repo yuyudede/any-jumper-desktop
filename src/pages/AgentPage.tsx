@@ -1,4 +1,5 @@
 import {
+  ArrowDown,
   Bot,
   Check,
   ChevronDown,
@@ -217,6 +218,7 @@ export default function AgentPage({
   const [rightPanelResizing, setRightPanelResizing] = useState(false);
   const [rightPanelWindowResizing, setRightPanelWindowResizing] = useState(false);
   const [rightPanelPreviewFile, setRightPanelPreviewFile] = useState<PreviewFile | null>(null);
+  const [rightPanelMainFreezeWidth, setRightPanelMainFreezeWidth] = useState<number | null>(null);
   const [rightPanelWidth, setRightPanelWidth] = useState(() => {
     const stored = localStorage.getItem("any-jumper-right-panel-width");
     return stored ? Number(stored) : 300;
@@ -276,10 +278,35 @@ export default function AgentPage({
   const initialSelectionRef = useRef(readInitialAgentSelection());
   const creatingThreadForWorkspaceRef = useRef(new Set<string>());
   const composerRef = useRef<AgentComposerHandle>(null);
+  const agentMainRef = useRef<HTMLElement | null>(null);
   const windowWidthRef = useRef(typeof window === "undefined" ? 0 : window.innerWidth);
 
   const activeWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
   const activeWorkspaceId = activeWorkspace?.id;
+  const setRightPanelOpenWithWindowResize = useCallback((next: boolean) => {
+    if (next !== rightPanelOpen) {
+      const panelResizeDelta = rightPanelWidth + RIGHT_PANEL_RESIZER_WIDTH;
+      const mainFreezeWidth = agentMainRef.current?.getBoundingClientRect().width;
+      if (mainFreezeWidth && Number.isFinite(mainFreezeWidth)) {
+        setRightPanelMainFreezeWidth(Math.round(mainFreezeWidth));
+      }
+      rightPanelWindowResizeSuppressedRef.current = true;
+      if (rightPanelWindowResizeSuppressTimer.current) {
+        window.clearTimeout(rightPanelWindowResizeSuppressTimer.current);
+      }
+      rightPanelWindowResizeSuppressTimer.current = window.setTimeout(() => {
+        rightPanelWindowResizeSuppressedRef.current = false;
+        rightPanelWindowResizeSuppressTimer.current = undefined;
+        windowWidthRef.current = window.innerWidth;
+        setRightPanelMainFreezeWidth(null);
+      }, 240);
+      void desktopApi.resizeCurrentWindowByWidthDelta(next ? panelResizeDelta : -panelResizeDelta);
+    }
+
+    setRightPanelOpen(next);
+    localStorage.setItem("any-jumper-right-panel-open", String(next));
+  }, [rightPanelOpen, rightPanelWidth]);
+
   const handleOpenGeneratedFile = useCallback(async (filePath: string) => {
     if (!activeWorkspace?.rootPath && !isAbsoluteFilePath(filePath)) {
       showNotice({ tone: "warning", title: "无法预览文件", detail: "当前没有可用于解析相对路径的工作区" });
@@ -297,15 +324,14 @@ export default function AgentPage({
         const content = await desktopApi.readFileContent(absolutePath);
         setRightPanelPreviewFile({ path: previewPath, content });
       }
-      setRightPanelOpen(true);
-      localStorage.setItem("any-jumper-right-panel-open", "true");
+      setRightPanelOpenWithWindowResize(true);
       pushActivity("预览过程文件", "success", previewPath);
     } catch (error) {
       const detailText = errorMessage(error);
       showNotice({ tone: "warning", title: "文件无法预览", detail: `${filePath}：${detailText}` });
       pushActivity("预览过程文件失败", "error", `${filePath}: ${detailText}`);
     }
-  }, [activeWorkspace?.rootPath, pushActivity]);
+  }, [activeWorkspace?.rootPath, pushActivity, setRightPanelOpenWithWindowResize]);
   const activeWorkspaceThreads = workspaceId ? threadsByWorkspaceId[workspaceId] || [] : [];
   const activeThread = detail?.thread || activeWorkspaceThreads.find((thread) => thread.id === threadId) || findThreadById(threadsByWorkspaceId, threadId);
   const activeModel = models.find((model) => model.id === selectedProvider);
@@ -383,23 +409,8 @@ export default function AgentPage({
 
   const handleRightPanelToggle = useCallback(() => {
     const next = !rightPanelOpen;
-
-    if (!next) {
-      rightPanelWindowResizeSuppressedRef.current = true;
-      if (rightPanelWindowResizeSuppressTimer.current) {
-        window.clearTimeout(rightPanelWindowResizeSuppressTimer.current);
-      }
-      rightPanelWindowResizeSuppressTimer.current = window.setTimeout(() => {
-        rightPanelWindowResizeSuppressedRef.current = false;
-        rightPanelWindowResizeSuppressTimer.current = undefined;
-        windowWidthRef.current = window.innerWidth;
-      }, 240);
-      void desktopApi.resizeCurrentWindowByWidthDelta(-(rightPanelWidth + RIGHT_PANEL_RESIZER_WIDTH));
-    }
-
-    setRightPanelOpen(next);
-    localStorage.setItem("any-jumper-right-panel-open", String(next));
-  }, [rightPanelOpen, rightPanelWidth]);
+    setRightPanelOpenWithWindowResize(next);
+  }, [rightPanelOpen, setRightPanelOpenWithWindowResize]);
 
   useEffect(() => {
     void bootstrap();
@@ -1439,10 +1450,13 @@ export default function AgentPage({
         )}
 
         <div
-          className={`agent-content-row ${rightPanelOpen && activeWorkspace ? "has-right-panel" : ""}`}
-          style={{ "--agent-right-panel-width": `${rightPanelWidth}px` } as React.CSSProperties}
+          className={`agent-content-row ${rightPanelOpen && activeWorkspace ? "has-right-panel" : ""} ${rightPanelMainFreezeWidth !== null ? "is-right-panel-layout-frozen" : ""}`}
+          style={{
+            "--agent-right-panel-width": `${rightPanelWidth}px`,
+            "--agent-main-freeze-width": `${rightPanelMainFreezeWidth ?? 0}px`,
+          } as React.CSSProperties}
         >
-        <section className="agent-main">
+        <section className="agent-main" ref={agentMainRef}>
           <header className="agent-status-strip">
             <div className="agent-status-copy">
               <div className="agent-status-title">
@@ -3400,8 +3414,13 @@ function TurnTracePanel({
             ) : null}
           </div>
           {showTraceJump ? (
-            <button className="turn-trace-jump-to-latest" type="button" onClick={jumpTraceToLatest}>
-              跳到最新
+            <button
+              aria-label="跳到最新"
+              className="turn-trace-jump-to-latest"
+              type="button"
+              onClick={jumpTraceToLatest}
+            >
+              <ArrowDown className="turn-trace-jump-icon" size={22} />
             </button>
           ) : null}
         </div>

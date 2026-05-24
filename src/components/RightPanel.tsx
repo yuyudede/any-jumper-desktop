@@ -15,7 +15,13 @@ import { FileBrowser, type FileTreeNode } from "./FileBrowser";
 import { PreviewPanel, type PreviewFile, type PreviewDiff } from "./PreviewPanel";
 import { desktopApi } from "../services/desktopApi";
 import { useGitService } from "../services/gitService";
-import type { GitStatus } from "../types";
+import {
+  buildGitChangeTree,
+  parseGitLogLines,
+  type GitChangeTreeFile,
+  type GitChangeTreeNode,
+  type GitRecentCommit,
+} from "../utils/gitPanel";
 
 type RightPanelTab = "files" | "changes" | "preview";
 
@@ -69,6 +75,10 @@ export function RightPanel({ rootPath, width, resizing = false, externalPreviewF
   const [commitMessageLoading, setCommitMessageLoading] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [draftMessage, setDraftMessage] = useState<string | null>(null);
+  const [recentCommitLog, setRecentCommitLog] = useState("");
+  const [commitLogLoading, setCommitLogLoading] = useState(false);
+  const [commitLogError, setCommitLogError] = useState<string | null>(null);
+  const [commitLogPanelOpen, setCommitLogPanelOpen] = useState(false);
 
   const loadRoot = useCallback(async () => {
     setFileLoading(true);
@@ -94,6 +104,12 @@ export function RightPanel({ rootPath, width, resizing = false, externalPreviewF
     setPreviewDiff(null);
     setActiveTab("preview");
   }, [externalPreviewFile]);
+
+  useEffect(() => {
+    setRecentCommitLog("");
+    setCommitLogError(null);
+    setCommitLogPanelOpen(false);
+  }, [rootPath]);
 
   const handleExpand = useCallback(async (node: FileTreeNode) => {
     if (node.type !== "directory") return [];
@@ -209,6 +225,31 @@ export function RightPanel({ rootPath, width, resizing = false, externalPreviewF
     [rootPath, git],
   );
 
+  const loadRecentGitLog = useCallback(async () => {
+    if (!rootPath) return;
+    setCommitLogLoading(true);
+    setCommitLogError(null);
+    try {
+      const log = await desktopApi.gitLog(rootPath, 6);
+      setRecentCommitLog(log);
+    } catch (err) {
+      setRecentCommitLog("");
+      setCommitLogError(err instanceof Error ? err.message : "加载最近提交失败");
+    } finally {
+      setCommitLogLoading(false);
+    }
+  }, [rootPath]);
+
+  useEffect(() => {
+    if (activeTab === "changes" && commitLogPanelOpen) {
+      void loadRecentGitLog();
+    }
+  }, [activeTab, commitLogPanelOpen, loadRecentGitLog]);
+
+  const handleCommitLogToggle = useCallback(() => {
+    setCommitLogPanelOpen((open) => !open);
+  }, []);
+
   const handleCommit = useCallback(async (message: string) => {
     if (!message.trim()) return;
     setCommitLoading(true);
@@ -221,12 +262,15 @@ export function RightPanel({ rootPath, width, resizing = false, externalPreviewF
       await desktopApi.gitStage(rootPath, committablePaths);
       await desktopApi.gitCommit(rootPath, message.trim());
       await git.refresh();
+      if (commitLogPanelOpen) {
+        await loadRecentGitLog();
+      }
     } catch (err) {
       window.alert(`提交失败：${err instanceof Error ? err.message : "未知错误"}`);
     } finally {
       setCommitLoading(false);
     }
-  }, [rootPath, git]);
+  }, [rootPath, git, commitLogPanelOpen, loadRecentGitLog]);
 
   const handleGenerateCommitMessage = useCallback(async () => {
     setDraftMessage("");
@@ -246,12 +290,15 @@ export function RightPanel({ rootPath, width, resizing = false, externalPreviewF
     try {
       await desktopApi.gitPush(rootPath);
       window.alert("推送成功");
+      if (commitLogPanelOpen) {
+        await loadRecentGitLog();
+      }
     } catch (err) {
       window.alert(`推送失败：${err instanceof Error ? err.message : "未知错误"}`);
     } finally {
       setPushLoading(false);
     }
-  }, [rootPath]);
+  }, [rootPath, commitLogPanelOpen, loadRecentGitLog]);
 
   const handlePreviewClose = useCallback(() => {
     setPreviewFile(null);
@@ -266,17 +313,15 @@ export function RightPanel({ rootPath, width, resizing = false, externalPreviewF
       : rootPath;
   }, [rootPath]);
 
-  // Group changed files by directory
-  const fileGroups = useMemo(() => {
-    const dirMap = new Map<string, typeof git.changedFiles>();
-    for (const f of git.changedFiles) {
-      const parts = f.path.split("/");
-      const dir = parts.length > 1 ? parts.slice(0, -1).join("/") : ".";
-      if (!dirMap.has(dir)) dirMap.set(dir, []);
-      dirMap.get(dir)!.push(f);
-    }
-    return [...dirMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [git.changedFiles]);
+  const gitChangeTree = useMemo(
+    () => buildGitChangeTree(git.changedFiles, git.untrackedFiles),
+    [git.changedFiles, git.untrackedFiles],
+  );
+
+  const recentCommits = useMemo(
+    () => parseGitLogLines(recentCommitLog),
+    [recentCommitLog],
+  );
 
   const toggleDir = useCallback((dir: string) => {
     setCollapsedDirs((prev) => {
@@ -287,25 +332,36 @@ export function RightPanel({ rootPath, width, resizing = false, externalPreviewF
     });
   }, []);
 
-  const statusLabel = (s: string) => {
-    switch (s[0]) {
-      case "M": return "已修改";
-      case "A": return "新增";
-      case "D": return "已删除";
-      case "R": return "重命名";
-      default: return "变更";
+  const handleOpenGitChange = useCallback((file: GitChangeTreeFile) => {
+    if (!file.tracked) {
+      void handleOpenUntracked(file.path);
+      return;
     }
-  };
 
-  const statusColor = (s: string) => {
-    switch (s[0]) {
-      case "M": return "text-amber-500";
-      case "A": return "text-green-500";
-      case "D": return "text-red-500";
-      case "R": return "text-blue-500";
-      default: return "text-muted-foreground";
+    if (file.worktreeStatus === "D") {
+      void desktopApi.readFileContentAtRef(rootPath, file.path, "HEAD")
+        .then((content) => {
+          setPreviewFile({ path: `${file.path} (已删除)`, content });
+          setPreviewDiff(null);
+          setActiveTab("preview");
+        })
+        .catch(() => {});
+      return;
     }
-  };
+
+    void handleOpenGitDiff(file.path);
+  }, [handleOpenGitDiff, handleOpenUntracked, rootPath]);
+
+  const gitBranchPanel = git.status ? (
+    <GitBranchPanel
+      branch={git.status.branch}
+      clean={!git.status.dirty}
+      commits={recentCommits}
+      loading={commitLogLoading}
+      error={commitLogError}
+      onRefresh={loadRecentGitLog}
+    />
+  ) : null;
 
   return (
     <div
@@ -324,7 +380,14 @@ export function RightPanel({ rootPath, width, resizing = false, externalPreviewF
           </button>
           <button
             type="button"
-            onClick={() => { setActiveTab("changes"); git.refresh(); }}
+            onClick={() => {
+              void git.refresh();
+              if (activeTab === "changes" && commitLogPanelOpen) {
+                void loadRecentGitLog();
+              } else {
+                setActiveTab("changes");
+              }
+            }}
             className={`agent-right-panel-tab ${activeTab === "changes" ? "is-active" : ""}`}
           >
             变更
@@ -389,7 +452,17 @@ export function RightPanel({ rootPath, width, resizing = false, externalPreviewF
             {/* Git status bar */}
             {git.status && (
               <div className="agent-right-panel-git-bar">
-                <GitBranch size={13} />
+                <button
+                  type="button"
+                  className={`agent-right-panel-toolbar-btn git-branch-toggle ${commitLogPanelOpen ? "is-active" : ""}`}
+                  onClick={handleCommitLogToggle}
+                  title={commitLogPanelOpen ? "隐藏提交记录" : "显示提交记录"}
+                  aria-label={commitLogPanelOpen ? "隐藏提交记录" : "显示提交记录"}
+                  aria-expanded={commitLogPanelOpen}
+                  aria-controls="git-commit-history-panel"
+                >
+                  <GitBranch size={13} />
+                </button>
                 <span className="git-branch-name">{git.status.branch}</span>
                 <span
                   className={`git-status-badge ${git.status.dirty ? "is-dirty" : "is-clean"}`}
@@ -434,7 +507,12 @@ export function RightPanel({ rootPath, width, resizing = false, externalPreviewF
                   <button
                     type="button"
                     className="agent-right-panel-toolbar-btn"
-                    onClick={git.refresh}
+                    onClick={() => {
+                      void git.refresh();
+                      if (commitLogPanelOpen) {
+                        void loadRecentGitLog();
+                      }
+                    }}
                     disabled={git.loading}
                     title="刷新"
                     aria-label="刷新 Git 状态"
@@ -498,138 +576,38 @@ export function RightPanel({ rootPath, width, resizing = false, externalPreviewF
               </div>
             )}
 
-            {git.error && (
-              <div className="agent-right-panel-error">{git.error}</div>
-            )}
+            <div className="git-change-scroll-area">
+              {git.error && (
+                <div className="agent-right-panel-error">{git.error}</div>
+              )}
 
-            {!git.status && !git.loading && !git.error && (
-              <div className="agent-right-panel-empty">
-                当前目录不是 Git 仓库
-              </div>
-            )}
-
-            {git.status && git.changedFiles.length === 0 && git.untrackedFiles.length === 0 && (
-              <div className="agent-right-panel-empty">
-                工作区干净
-              </div>
-            )}
-
-            {/* Changed files grouped by directory */}
-            {fileGroups.map(([dir, files]) => {
-              const isCollapsed = collapsedDirs.has(dir);
-              return (
-                <div key={dir}>
-                  {dir !== "." && (
-                    <button
-                      type="button"
-                      onClick={() => toggleDir(dir)}
-                      className="git-change-dir"
-                    >
-                      <ChevronDown
-                        size={12}
-                        className={`transition-transform ${isCollapsed ? "-rotate-90" : ""}`}
-                      />
-                      <span className="truncate">{dir}</span>
-                      <span className="ml-auto text-[11px] text-muted-foreground">
-                        {files.length} 个文件
-                      </span>
-                    </button>
-                  )}
-                  {!isCollapsed && files.map((file) => (
-                    <div
-                      key={file.path}
-                      className="git-change-file group"
-                    >
-                      <button
-                        type="button"
-                        className="git-change-file-main"
-                        onClick={() => {
-                          if (file.worktreeStatus === "D") {
-                            // Deleted file: show old content as preview
-                            desktopApi.readFileContentAtRef(rootPath, file.path, "HEAD")
-                              .then((content) => {
-                                setPreviewFile({ path: `${file.path} (已删除)`, content });
-                                setPreviewDiff(null);
-                                setActiveTab("preview");
-                              })
-                              .catch(() => {});
-                          } else {
-                            handleOpenGitDiff(file.path);
-                          }
-                        }}
-                        disabled={diffLoading}
-                      >
-                        <FileText size={13} className="shrink-0" />
-                        <span className="truncate ml-1.5">
-                          {file.path.split("/").pop()}
-                        </span>
-                        <span className={`text-[10px] ml-1.5 shrink-0 ${statusColor(file.status)}`}>
-                          {statusLabel(file.status)}
-                        </span>
-                        {file.path.includes("/") && (
-                          <span className="text-[10px] text-muted-foreground truncate ml-1">
-                            {file.path.split("/").slice(0, -1).join("/")}
-                          </span>
-                        )}
-                        <span className="ml-auto shrink-0 hidden group-hover:flex items-center">
-                          <span
-                            className="git-revert-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRevert(file.path);
-                            }}
-                            title="还原变更"
-                          >
-                            <Undo2 size={13} />
-                          </span>
-                        </span>
-                      </button>
-                    </div>
-                  ))}
+              {!git.status && !git.loading && !git.error && (
+                <div className="agent-right-panel-empty">
+                  当前目录不是 Git 仓库
                 </div>
-              );
-            })}
+              )}
 
-            {/* Untracked files */}
-            {git.untrackedFiles.length > 0 && (
-              <div>
-                <div className="git-change-section-header">
-                  未追踪文件
+              {git.status && gitChangeTree.length === 0 && (
+                <div className="agent-right-panel-empty">
+                  工作区干净
                 </div>
-                {git.untrackedFiles.map((file) => (
-                  <div key={file.path} className="git-change-file group">
-                    <button
-                      type="button"
-                      className="git-change-file-main"
-                      onClick={() => handleOpenUntracked(file.path)}
-                    >
-                      <FileText size={13} className="shrink-0" />
-                      <span className="truncate ml-1.5">
-                        {file.path.split("/").pop()}
-                      </span>
-                      <span className="text-[10px] ml-1.5 shrink-0 text-amber-500">
-                        新文件
-                      </span>
-                      {file.path.includes("/") && (
-                        <span className="text-[10px] text-muted-foreground truncate ml-1">
-                          {file.path.split("/").slice(0, -1).join("/")}
-                        </span>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      className="git-change-file-action git-stage-btn"
-                      onClick={() => handleStageFile(file.path)}
-                      disabled={git.loading}
-                      title="暂存文件"
-                      aria-label={`暂存 ${file.path}`}
-                    >
-                      <Plus size={13} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+              )}
+
+              {gitChangeTree.length > 0 && (
+                <GitChangeTreeView
+                  nodes={gitChangeTree}
+                  collapsedDirs={collapsedDirs}
+                  diffLoading={diffLoading}
+                  gitLoading={git.loading}
+                  onOpenFile={handleOpenGitChange}
+                  onRevert={handleRevert}
+                  onStageFile={handleStageFile}
+                  onToggleDir={toggleDir}
+                />
+              )}
+            </div>
+
+            {commitLogPanelOpen ? gitBranchPanel : null}
           </div>
         )}
 
@@ -646,4 +624,239 @@ export function RightPanel({ rootPath, width, resizing = false, externalPreviewF
       </div>
     </div>
   );
+}
+
+interface GitChangeTreeViewProps {
+  nodes: GitChangeTreeNode[];
+  collapsedDirs: Set<string>;
+  diffLoading: boolean;
+  gitLoading: boolean;
+  depth?: number;
+  onOpenFile: (file: GitChangeTreeFile) => void;
+  onRevert: (filePath: string) => void;
+  onStageFile: (filePath: string) => void;
+  onToggleDir: (dir: string) => void;
+}
+
+function GitChangeTreeView({
+  nodes,
+  collapsedDirs,
+  diffLoading,
+  gitLoading,
+  depth = 0,
+  onOpenFile,
+  onRevert,
+  onStageFile,
+  onToggleDir,
+}: GitChangeTreeViewProps) {
+  return (
+    <div className={depth === 0 ? "git-change-tree" : "git-change-tree-children"}>
+      {nodes.map((node) => {
+        if (node.type === "directory") {
+          const isCollapsed = collapsedDirs.has(node.path);
+          return (
+            <div className="git-change-tree-node" key={node.id}>
+              <button
+                type="button"
+                className="git-change-tree-dir"
+                style={{ paddingLeft: 10 + depth * 14 }}
+                onClick={() => onToggleDir(node.path)}
+              >
+                <ChevronDown className={`git-change-tree-chevron ${isCollapsed ? "is-collapsed" : ""}`} size={12} />
+                <FolderOpen size={13} className="git-change-tree-icon" />
+                <span className="git-change-tree-name">{node.name}</span>
+                <span className="git-change-tree-count">{node.fileCount}</span>
+              </button>
+              {!isCollapsed && (
+                <GitChangeTreeView
+                  nodes={node.children}
+                  collapsedDirs={collapsedDirs}
+                  diffLoading={diffLoading}
+                  gitLoading={gitLoading}
+                  depth={depth + 1}
+                  onOpenFile={onOpenFile}
+                  onRevert={onRevert}
+                  onStageFile={onStageFile}
+                  onToggleDir={onToggleDir}
+                />
+              )}
+            </div>
+          );
+        }
+
+        return (
+          <GitChangeTreeFileRow
+            file={node}
+            depth={depth}
+            diffLoading={diffLoading}
+            gitLoading={gitLoading}
+            key={node.id}
+            onOpenFile={onOpenFile}
+            onRevert={onRevert}
+            onStageFile={onStageFile}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function GitChangeTreeFileRow({
+  file,
+  depth,
+  diffLoading,
+  gitLoading,
+  onOpenFile,
+  onRevert,
+  onStageFile,
+}: {
+  file: GitChangeTreeFile;
+  depth: number;
+  diffLoading: boolean;
+  gitLoading: boolean;
+  onOpenFile: (file: GitChangeTreeFile) => void;
+  onRevert: (filePath: string) => void;
+  onStageFile: (filePath: string) => void;
+}) {
+  const parentPath = file.path.includes("/") ? file.path.split("/").slice(0, -1).join("/") : "";
+
+  return (
+    <div className="git-change-tree-file" style={{ paddingLeft: 22 + depth * 14 }}>
+      <button
+        type="button"
+        className="git-change-file-main"
+        onClick={() => onOpenFile(file)}
+        disabled={diffLoading}
+      >
+        <FileText size={13} className="git-change-tree-icon" />
+        <span className="git-change-tree-name">{file.name}</span>
+        <span className={`git-change-status ${statusToneClass(file)}`}>
+          {statusLabel(file)}
+        </span>
+        {parentPath ? (
+          <span className="git-change-tree-path">{parentPath}</span>
+        ) : null}
+      </button>
+      <div className="git-change-tree-actions">
+        {file.tracked ? (
+          <button
+            type="button"
+            className="git-change-file-action"
+            onClick={() => onRevert(file.path)}
+            title="还原变更"
+            aria-label={`还原 ${file.path}`}
+          >
+            <Undo2 size={13} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="git-change-file-action git-stage-btn"
+            onClick={() => onStageFile(file.path)}
+            disabled={gitLoading}
+            title="暂存文件"
+            aria-label={`暂存 ${file.path}`}
+          >
+            <Plus size={13} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GitBranchPanel({
+  branch,
+  clean,
+  commits,
+  loading,
+  error,
+  onRefresh,
+}: {
+  branch: string;
+  clean: boolean;
+  commits: GitRecentCommit[];
+  loading: boolean;
+  error: string | null;
+  onRefresh: () => void;
+}) {
+  return (
+    <section className="git-branch-panel" id="git-commit-history-panel">
+      <div className="git-branch-panel-header">
+        <div>
+          <div className="git-branch-panel-kicker">提交记录</div>
+          <div className="git-branch-panel-branch">
+            <GitBranch size={13} />
+            <span>{branch}</span>
+            <span className={`git-status-badge ${clean ? "is-clean" : "is-dirty"}`}>
+              {clean ? "clean" : "dirty"}
+            </span>
+          </div>
+        </div>
+        <div className="git-branch-panel-actions">
+          <button
+            type="button"
+            className="agent-right-panel-toolbar-btn"
+            onClick={onRefresh}
+            disabled={loading}
+            title="刷新最近提交"
+            aria-label="刷新最近提交"
+          >
+            <RefreshCw size={13} className={loading ? "is-spinning" : ""} />
+          </button>
+        </div>
+      </div>
+
+      <div className="git-branch-panel-content">
+        <div className="git-branch-panel-title">最近提交</div>
+        {error ? (
+          <div className="git-branch-panel-empty">{error}</div>
+        ) : loading && commits.length === 0 ? (
+          <div className="git-branch-panel-empty">加载中...</div>
+        ) : commits.length > 0 ? (
+          <div className="git-recent-commit-list">
+            {commits.map((commit) => (
+              <GitRecentCommitRow commit={commit} key={`${commit.hash}-${commit.subject}`} />
+            ))}
+          </div>
+        ) : (
+          <div className="git-branch-panel-empty">暂无提交记录</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function GitRecentCommitRow({ commit }: { commit: GitRecentCommit }) {
+  return (
+    <div className="git-recent-commit" title={commit.raw}>
+      <span className="git-recent-commit-hash">{commit.hash || "----"}</span>
+      <span className="git-recent-commit-subject">{commit.subject}</span>
+      {commit.refs.slice(0, 2).map((ref) => (
+        <span className="git-recent-commit-ref" key={ref}>{ref}</span>
+      ))}
+    </div>
+  );
+}
+
+function statusLabel(file: GitChangeTreeFile) {
+  if (!file.tracked) return "新文件";
+  switch (file.status[0]) {
+    case "M": return "已修改";
+    case "A": return "新增";
+    case "D": return "已删除";
+    case "R": return "重命名";
+    default: return "变更";
+  }
+}
+
+function statusToneClass(file: GitChangeTreeFile) {
+  if (!file.tracked) return "is-untracked";
+  switch (file.status[0]) {
+    case "M": return "is-modified";
+    case "A": return "is-added";
+    case "D": return "is-deleted";
+    case "R": return "is-renamed";
+    default: return "is-changed";
+  }
 }
