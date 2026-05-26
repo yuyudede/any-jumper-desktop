@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Any Jumper 思考展示预览</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #111214;
+      --panel: #17181a;
+      --panel-soft: #1e2023;
+      --line: #2a2d31;
+      --line-soft: #24272b;
+      --text: #f2f3f5;
+      --muted: #a7abb2;
+      --muted-soft: #777d86;
+      --chip: #25272b;
+      --green: #61c786;
+      --blue: #78a8ff;
+      --warn: #e6b85c;
+      --danger: #ef7e7e;
+      --mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      letter-spacing: 0;
+    }
+
+    main {
+      width: min(1080px, calc(100vw - 40px));
+      margin: 32px auto;
+    }
+
+    .preview-shell {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 24px 72px rgba(0, 0, 0, 0.28);
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid var(--line);
+      padding: 16px 18px;
+    }
+
+    .title {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 10px;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 680;
+    }
+
+    .title small {
+      overflow: hidden;
+      color: var(--muted-soft);
+      font-size: 12px;
+      font-weight: 520;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .segmented {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #131416;
+      padding: 3px;
+    }
+
+    .segmented span {
+      border-radius: 6px;
+      color: var(--muted-soft);
+      font-size: 12px;
+      padding: 5px 8px;
+      white-space: nowrap;
+    }
+
+    .segmented .active {
+      background: var(--panel-soft);
+      color: var(--text);
+    }
+
+    .conversation {
+      display: grid;
+      gap: 26px;
+      padding: 22px;
+    }
+
+    .user-message {
+      justify-self: end;
+      max-width: min(720px, 82%);
+      border-radius: 10px;
+      background: #23262b;
+      color: var(--text);
+      line-height: 1.6;
+      padding: 12px 14px;
+    }
+
+    .assistant-turn {
+      display: grid;
+      width: min(860px, 100%);
+      gap: 18px;
+    }
+
+    .process-preview {
+      display: grid;
+      gap: 0;
+      color: var(--text);
+    }
+
+    .process-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--line-soft);
+      padding-bottom: 12px;
+    }
+
+    .process-state {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    .chevron {
+      width: 16px;
+      height: 16px;
+      color: var(--muted-soft);
+    }
+
+    .process-state strong {
+      color: var(--muted);
+      font-size: 16px;
+      font-weight: 660;
+    }
+
+    .tokens {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+      color: var(--muted-soft);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .token-pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #141517;
+      padding: 3px 7px;
+    }
+
+    .process-stream {
+      display: grid;
+      gap: 0;
+      padding-top: 18px;
+    }
+
+    .meta-row {
+      display: flex;
+      min-height: 26px;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted-soft);
+      font-size: 13px;
+      font-weight: 620;
+      line-height: 1.4;
+    }
+
+    .meta-row svg {
+      width: 15px;
+      height: 15px;
+      color: var(--muted-soft);
+      flex: 0 0 auto;
+    }
+
+    .thought {
+      max-width: 78ch;
+      color: var(--text);
+      font-size: 17px;
+      font-weight: 620;
+      line-height: 1.7;
+      margin: 12px 0 24px;
+    }
+
+    .thought code,
+    .answer code,
+    .tool-detail code {
+      border-radius: 7px;
+      background: var(--chip);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.94em;
+      padding: 2px 6px;
+    }
+
+    .inline-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: -8px 0 20px 23px;
+    }
+
+    .mini-button {
+      display: inline-flex;
+      min-height: 30px;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #151619;
+      color: var(--muted);
+      font: inherit;
+      font-size: 12px;
+      padding: 5px 9px;
+    }
+
+    .tool-summary {
+      display: grid;
+      gap: 8px;
+      margin: -4px 0 22px 23px;
+    }
+
+    details {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #141517;
+    }
+
+    summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 620;
+      list-style: none;
+      padding: 9px 11px;
+    }
+
+    summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .tool-detail {
+      display: grid;
+      gap: 8px;
+      border-top: 1px solid var(--line-soft);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+      padding: 10px 11px 12px;
+    }
+
+    .tool-detail pre {
+      overflow: auto;
+      border: 1px solid var(--line-soft);
+      border-radius: 7px;
+      background: #101113;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11.5px;
+      line-height: 1.55;
+      margin: 0;
+      padding: 9px;
+      white-space: pre-wrap;
+    }
+
+    .answer {
+      display: grid;
+      gap: 12px;
+      max-width: 78ch;
+      border-top: 1px solid var(--line-soft);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.74;
+      padding-top: 18px;
+    }
+
+    .answer p {
+      margin: 0;
+    }
+
+    .answer-title {
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .variant-note {
+      border-left: 2px solid var(--blue);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      padding-left: 12px;
+    }
+
+    .compare-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      border-top: 1px solid var(--line);
+      padding: 18px 22px 22px;
+    }
+
+    .compare-card {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #141517;
+      padding: 14px;
+    }
+
+    .compare-card h2 {
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.3;
+      margin: 0 0 10px;
+    }
+
+    .compare-card p {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    .is-blue {
+      color: var(--blue);
+    }
+
+    .is-green {
+      color: var(--green);
+    }
+
+    @media (max-width: 760px) {
+      main {
+        width: min(100vw - 20px, 1080px);
+        margin: 12px auto;
+      }
+
+      .topbar,
+      .process-header,
+      .compare-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .segmented,
+      .tokens {
+        justify-content: flex-start;
+      }
+
+      .conversation {
+        padding: 16px;
+      }
+
+      .thought {
+        font-size: 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="preview-shell" aria-label="Any Jumper 思考展示预览">
+      <header class="topbar">
+        <div class="title">
+          <span>Any Jumper 思考展示预览</span>
+          <small>Codex 式轻量过程流 + 可展开调试详情</small>
+        </div>
+        <div class="segmented" aria-label="预览模式">
+          <span class="active">推荐态</span>
+          <span>紧凑态</span>
+          <span>调试态</span>
+        </div>
+      </header>
+
+      <div class="conversation">
+        <div class="user-message">
+          我想要进一步优化我的思考展示，可以参考下 Codex，给出我们和 Codex 之间的差异吧。
+        </div>
+
+        <article class="assistant-turn">
+          <section class="process-preview" aria-label="处理过程">
+            <div class="process-header">
+              <div class="process-state">
+                <strong>已处理 8m 54s</strong>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <div class="tokens" aria-label="Token 使用">
+                <span class="token-pill">↑ 12.4k</span>
+                <span class="token-pill">↓ 2.1k</span>
+                <span class="token-pill">缓存 68%</span>
+              </div>
+            </div>
+
+            <div class="process-stream">
+              <div class="meta-row">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M14 3v4a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                已浏览 2 个文件
+              </div>
+              <p class="thought">
+                我会先看清楚当前实现链路：消息渲染、<code>thinkingTrace</code> 聚合、工具事件，以及样式层的默认展开策略。重点不是先改 UI，而是找出哪里让过程展示显得“像面板”，哪里可以变成“像连续工作日志”。
+              </p>
+
+              <div class="meta-row">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M4 7h16M4 12h10M4 17h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                已列出文件 已运行 2 条命令
+              </div>
+              <p class="thought">
+                仓库里已经有不少未提交改动，我把它们当作现状分析。现在看到的结构是：Any Jumper 用 <code>Trace</code> header、时间线、工具行详情来承载过程；Codex 更偏向把自然语言进展直接放进主阅读流。
+              </p>
+
+              <div class="meta-row">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
+                  <path d="m21 21-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                已探索 7 个文件 2 次搜索
+              </div>
+              <p class="thought">
+                一个关键差异是默认信息密度：Codex 把“我现在判断到哪一步了”放在前台，把工具数量压成灰色 meta；Any Jumper 当前把工具、推理、审批都放进同一个结构化容器，调试强，但阅读上更重。
+              </p>
+
+              <div class="tool-summary">
+                <details>
+                  <summary>查看本轮工具详情：搜索 ×2 · 读取文件 ×4 · Shell ×1</summary>
+                  <div class="tool-detail">
+                    <div>输入 <code>rg -n "thinkingTrace|turn-trace|progress.note"</code></div>
+                    <pre>src/pages/AgentPage.tsx:3336:function TurnTracePanel(...)
+src/utils/thinkingTrace.ts:316:function buildSummary(...)
+src/styles/theme.css:4254:.turn-trace { ... }</pre>
+                  </div>
+                </details>
+              </div>
+
+              <div class="meta-row">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                已收敛优化方向
+              </div>
+              <p class="thought">
+                我的建议是做双层体验：默认像 Codex 一样展示轻量过程流；当用户需要排查时，再展开 Any Jumper 已有的工具详情、输入输出和审批动作。
+              </p>
+
+              <div class="inline-actions">
+                <button class="mini-button" type="button">展开全部过程</button>
+                <button class="mini-button" type="button">复制过程摘要</button>
+                <button class="mini-button" type="button">只看工具</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="answer" aria-label="最终回答">
+            <div class="answer-title">差异结论</div>
+            <p>Codex 的优势是阅读节奏轻：过程像一串连续的工作旁白，灰色工具统计只作为可信度线索出现。Any Jumper 的优势是可诊断：工具输入输出、审批、token 都能深挖。</p>
+            <p>推荐版本保留两者：默认展示自然语言过程流；工具详情收进折叠区；完成后历史对话仍保留过程摘要。</p>
+            <p class="variant-note">命名上建议把 “Trace” 改成 “处理过程” 或直接用 “已处理 8m 54s”，减少开发者感。</p>
+          </section>
+        </article>
+      </div>
+
+      <section class="compare-grid" aria-label="方案对比">
+        <div class="compare-card">
+          <h2><span class="is-green">推荐</span>：轻量过程流</h2>
+          <p>默认展开关键进展句，工具统计作为灰色 meta 穿插。最接近 Codex，适合普通用户阅读。</p>
+        </div>
+        <div class="compare-card">
+          <h2><span class="is-blue">保留</span>：调试详情层</h2>
+          <p>点击后展开工具输入、输出、审批和 token。保留 Any Jumper 当前的可诊断优势。</p>
+        </div>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

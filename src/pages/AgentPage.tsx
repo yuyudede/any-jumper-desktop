@@ -7,11 +7,11 @@ import {
   FilePlus2,
   Folder,
   FolderOpen,
-  FolderTree,
   GitBranch,
   History,
   Info,
   KeyRound,
+  ListTodo,
   MapPin,
   MessageSquare,
   Moon,
@@ -90,6 +90,8 @@ import { Conversation, ConversationScrollButton } from "../components/conversati
 import { ResizeHandle } from "../components/ResizeHandle";
 import { PreviewPanel, type PreviewFile } from "../components/PreviewPanel";
 import { RightPanel } from "../components/RightPanel";
+import SubagentTaskIndicator from "../components/SubagentTaskIndicator";
+import TasksBar from "../components/TasksBar";
 import ModelPage from "./ModelPage";
 import PluginPage from "./PluginPage";
 import PortalPage from "./PortalPage";
@@ -108,6 +110,7 @@ import type {
   ModelConfig,
   PermissionMode,
   SkillSummary,
+  SubagentTask,
   ThreadDetail,
   ToolCall,
   Workspace,
@@ -121,12 +124,14 @@ import {
   type TurnTokenUsage,
 } from "../utils/thinkingTrace";
 import { formatTraceThoughtText } from "../utils/traceThoughtText";
+import { turnTraceHeadline } from "../utils/turnTraceDisplay";
 import {
   buildToolTraceCardsForTurn,
   reduceToolTraceByTurn,
   type ToolTraceCardModel,
   type ToolTraceByTurn,
 } from "../utils/toolTrace";
+import { reduceSubagentTasks } from "../utils/subagentTracker";
 import { stripProgressChatter } from "../utils/progressChatter";
 import {
   DEEPAGENTS_RUNTIME_ID,
@@ -219,6 +224,7 @@ export default function AgentPage({
   );
   const [rightPanelResizing, setRightPanelResizing] = useState(false);
   const [rightPanelWindowResizing, setRightPanelWindowResizing] = useState(false);
+  const [rightPanelHostWindowResizing, setRightPanelHostWindowResizing] = useState(false);
   const [rightPanelPreviewFile, setRightPanelPreviewFile] = useState<PreviewFile | null>(null);
   const [rightPanelMainFreezeWidth, setRightPanelMainFreezeWidth] = useState<number | null>(null);
   const [rightPanelWidth, setRightPanelWidth] = useState(() => {
@@ -264,6 +270,11 @@ export default function AgentPage({
   }, [sidebarWidth]);
 
   const [terminalVisible, setTerminalVisible] = useState(false);
+  const [subagentTasks, setSubagentTasks] = useState<SubagentTask[]>([]);
+  const [tasksBarExpanded, setTasksBarExpanded] = useState(false);
+  const toggleTasksBarExpanded = useCallback(() => {
+    setTasksBarExpanded((value) => !value);
+  }, []);
   const [bridgeStatus, setBridgeStatus] = useState<AgentBridgeStatus>();
   const [thinkingTraceByTurn, setThinkingTraceByTurn] = useState<ThinkingTraceByTurn>({});
   const [tokenUsageByTurn, setTokenUsageByTurn] = useState<Record<string, TurnTokenUsage>>({});
@@ -275,8 +286,8 @@ export default function AgentPage({
   const refreshTimer = useRef<number>();
   const noticeTimer = useRef<number>();
   const rightPanelWindowResizeTimer = useRef<number>();
-  const rightPanelWindowResizeSuppressTimer = useRef<number>();
   const rightPanelWindowResizeSuppressedRef = useRef(false);
+  const rightPanelToggleTransactionRef = useRef(0);
   const initialSelectionRef = useRef(readInitialAgentSelection());
   const creatingThreadForWorkspaceRef = useRef(new Set<string>());
   const composerRef = useRef<AgentComposerHandle>(null);
@@ -286,26 +297,59 @@ export default function AgentPage({
   const activeWorkspace = workspaces.find((workspace) => workspace.id === workspaceId);
   const activeWorkspaceId = activeWorkspace?.id;
   const setRightPanelOpenWithWindowResize = useCallback((next: boolean) => {
-    if (next !== rightPanelOpen) {
-      const panelResizeDelta = rightPanelWidth + RIGHT_PANEL_RESIZER_WIDTH;
-      const mainFreezeWidth = agentMainRef.current?.getBoundingClientRect().width;
-      if (mainFreezeWidth && Number.isFinite(mainFreezeWidth)) {
-        setRightPanelMainFreezeWidth(Math.round(mainFreezeWidth));
-      }
-      rightPanelWindowResizeSuppressedRef.current = true;
-      if (rightPanelWindowResizeSuppressTimer.current) {
-        window.clearTimeout(rightPanelWindowResizeSuppressTimer.current);
-      }
-      rightPanelWindowResizeSuppressTimer.current = window.setTimeout(() => {
-        rightPanelWindowResizeSuppressedRef.current = false;
-        rightPanelWindowResizeSuppressTimer.current = undefined;
-        windowWidthRef.current = window.innerWidth;
-        setRightPanelMainFreezeWidth(null);
-      }, 240);
-      void desktopApi.resizeCurrentWindowByWidthDelta(next ? panelResizeDelta : -panelResizeDelta);
+    if (next === rightPanelOpen) {
+      localStorage.setItem("any-jumper-right-panel-open", String(next));
+      return;
     }
 
-    setRightPanelOpen(next);
+    const panelResizeDelta = rightPanelWidth + RIGHT_PANEL_RESIZER_WIDTH;
+    const canResizeHostWindow = Boolean(window.anyJumper?.invoke);
+    const transactionId = rightPanelToggleTransactionRef.current + 1;
+    rightPanelToggleTransactionRef.current = transactionId;
+
+    const finishRightPanelToggleAfterPaint = (expectedTransactionId: number) => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          if (rightPanelToggleTransactionRef.current !== expectedTransactionId) return;
+          rightPanelWindowResizeSuppressedRef.current = false;
+          setRightPanelHostWindowResizing(false);
+          windowWidthRef.current = window.innerWidth;
+          setRightPanelMainFreezeWidth(null);
+        });
+      });
+    };
+
+    const mainFreezeWidth = agentMainRef.current?.getBoundingClientRect().width;
+    if (mainFreezeWidth && Number.isFinite(mainFreezeWidth)) {
+      setRightPanelMainFreezeWidth(Math.round(mainFreezeWidth));
+    }
+
+    if (!canResizeHostWindow) {
+      rightPanelWindowResizeSuppressedRef.current = false;
+      setRightPanelHostWindowResizing(false);
+      setRightPanelMainFreezeWidth(null);
+      setRightPanelOpen(next);
+      localStorage.setItem("any-jumper-right-panel-open", String(next));
+      return;
+    }
+
+    rightPanelWindowResizeSuppressedRef.current = true;
+    setRightPanelHostWindowResizing(true);
+
+    const resizePromise = desktopApi.resizeCurrentWindowByWidthDelta(next ? panelResizeDelta : -panelResizeDelta);
+    if (next) {
+      setRightPanelOpen(true);
+      void resizePromise.catch(() => undefined).finally(() => {
+        finishRightPanelToggleAfterPaint(transactionId);
+      });
+    } else {
+      void resizePromise.catch(() => undefined).finally(() => {
+        if (rightPanelToggleTransactionRef.current !== transactionId) return;
+        setRightPanelOpen(false);
+        finishRightPanelToggleAfterPaint(transactionId);
+      });
+    }
+
     localStorage.setItem("any-jumper-right-panel-open", String(next));
   }, [rightPanelOpen, rightPanelWidth]);
 
@@ -383,6 +427,7 @@ export default function AgentPage({
     () => (detail?.approvals || []).filter((approval) => !approval.decision),
     [detail?.approvals],
   );
+  const activeApproval = pendingApprovals[0];
 
   useEffect(() => {
     windowWidthRef.current = window.innerWidth;
@@ -420,7 +465,6 @@ export default function AgentPage({
       if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
       if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
       if (rightPanelWindowResizeTimer.current) window.clearTimeout(rightPanelWindowResizeTimer.current);
-      if (rightPanelWindowResizeSuppressTimer.current) window.clearTimeout(rightPanelWindowResizeSuppressTimer.current);
     };
   }, []);
 
@@ -428,6 +472,11 @@ export default function AgentPage({
   useEffect(() => {
     registerBuiltinCommands(() => skills);
   }, [skills]);
+
+  useEffect(() => {
+    setSubagentTasks([]);
+    setTasksBarExpanded(false);
+  }, [threadId]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -1080,6 +1129,7 @@ export default function AgentPage({
     if (event.threadId !== threadId) return;
     setThinkingTraceByTurn((current) => reduceThinkingTraceByTurn(current, event));
     setToolTraceByTurn((current) => reduceToolTraceByTurn(current, event));
+    setSubagentTasks((current) => reduceSubagentTasks(current, event));
     setDetail((current) => applyEvent(current, event));
     if ((event.event === "turn.completed" || event.event === "turn.failed") && event.turnId) {
       const payload = event.payload as Record<string, unknown> | undefined;
@@ -1148,7 +1198,7 @@ export default function AgentPage({
     <TooltipProvider delayDuration={160}>
       <div
         className={`agent-workbench shadcn-agent-shell ${sidebarCollapsed ? "is-sidebar-collapsed" : ""}`}
-        style={{ "--agent-sidebar-width": `${sidebarCollapsed ? 60 : sidebarWidth}px` } as React.CSSProperties}
+        style={{ "--agent-sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
         data-ui="shadcn-agent-shell"
       >
         {notice ? (
@@ -1159,65 +1209,6 @@ export default function AgentPage({
         ) : null}
 
         <aside className="agent-sidebar">
-          {/* Mini Rail — icon-only collapsed mode */}
-          <div className="agent-mini-rail">
-            <button
-              className={`agent-mini-rail-entry ${activeMainView === "bridge" ? "is-active" : ""}`}
-              type="button"
-              aria-label="Agent-Bridge"
-              onClick={openAgentBridge}
-            >
-              <Radio size={17} />
-            </button>
-            <button
-              className={`agent-mini-rail-entry ${activeMainView === "modelConfig" ? "is-active" : ""}`}
-              type="button"
-              aria-label="Model-Config"
-              onClick={() => setActiveMainView("modelConfig")}
-            >
-              <KeyRound size={17} />
-            </button>
-            <button
-              className={`agent-mini-rail-entry ${activeMainView === "portal" ? "is-active" : ""}`}
-              type="button"
-              aria-label="Portal"
-              onClick={() => setActiveMainView("portal")}
-            >
-              <PanelTopOpen size={17} />
-            </button>
-            <button
-              className={`agent-mini-rail-entry ${activeMainView === "plugin" ? "is-active" : ""}`}
-              type="button"
-              aria-label="Plugin"
-              onClick={() => setActiveMainView("plugin")}
-            >
-              <Package size={17} />
-            </button>
-            <div className="agent-mini-rail-separator" />
-            <button
-              className="agent-mini-rail-entry"
-              type="button"
-              aria-label="Project"
-              onClick={toggleProjectTreeCollapsed}
-            >
-              <FolderTree size={17} />
-            </button>
-            {onToggleTheme ? (
-              <>
-                <div className="agent-mini-rail-spacer" />
-                <button
-                  className="agent-mini-rail-entry agent-mini-rail-theme-toggle"
-                  type="button"
-                  aria-label={`切换到${themeMode === "dark" ? "浅色" : "深色"}主题`}
-                  aria-pressed={themeMode === "dark"}
-                  onClick={onToggleTheme}
-                >
-                  {themeMode === "dark" ? <Sun size={17} /> : <Moon size={17} />}
-                </button>
-              </>
-            ) : null}
-          </div>
-
           <button
             className={`agent-bridge-entry ${activeMainView === "bridge" ? "is-active" : ""}`}
             type="button"
@@ -1469,7 +1460,7 @@ export default function AgentPage({
         )}
 
         <div
-          className={`agent-content-row ${rightPanelOpen && activeWorkspace ? "has-right-panel" : ""} ${rightPanelMainFreezeWidth !== null ? "is-right-panel-layout-frozen" : ""}`}
+          className={`agent-content-row ${rightPanelOpen && activeWorkspace ? "has-right-panel" : ""} ${rightPanelMainFreezeWidth !== null ? "is-right-panel-layout-frozen" : ""} ${rightPanelHostWindowResizing ? "is-host-window-resizing" : ""}`}
           style={{
             "--agent-right-panel-width": `${rightPanelWidth}px`,
             "--agent-main-freeze-width": `${rightPanelMainFreezeWidth ?? 0}px`,
@@ -1514,6 +1505,11 @@ export default function AgentPage({
                     <span className="agent-meta-pill"><History size={12} />{detail?.queue.length || 0} queued</span>
                     <span className="agent-meta-pill"><PauseCircle size={12} />{pendingApprovals.length} approvals</span>
                     <span className="agent-meta-pill"><Wrench size={12} />{detail?.toolCalls.length || 0} tools</span>
+                    <SubagentTaskIndicator
+                      tasks={subagentTasks}
+                      expanded={tasksBarExpanded}
+                      onClick={toggleTasksBarExpanded}
+                    />
                   </>
                 )}
               </div>
@@ -1700,6 +1696,8 @@ export default function AgentPage({
 
               <AgentComposer
                 ref={composerRef}
+                subagentTasks={subagentTasks}
+                tasksBarExpanded={tasksBarExpanded}
                 activeModelDisplayName={activeModel?.displayName || "Model"}
                 modelKeyMissing={modelKeyMissing}
                 permissionView={permissionView}
@@ -1711,6 +1709,7 @@ export default function AgentPage({
                 onAttachFilesActivity={pushActivity}
                 onInterrupt={interrupt}
                 onModelSettingsOpen={openModelSettings}
+                onTasksBarToggle={toggleTasksBarExpanded}
                 onPermissionModeChange={setPermissionMode}
                 onSubmit={sendMessage}
               />
@@ -1863,6 +1862,8 @@ export default function AgentPage({
 
               <AgentComposer
                 ref={composerRef}
+                subagentTasks={subagentTasks}
+                tasksBarExpanded={tasksBarExpanded}
                 activeModelDisplayName={activeModel?.displayName || "Model"}
                 modelKeyMissing={modelKeyMissing}
                 permissionView={permissionView}
@@ -1874,6 +1875,7 @@ export default function AgentPage({
                 onAttachFilesActivity={pushActivity}
                 onInterrupt={interrupt}
                 onModelSettingsOpen={openModelSettings}
+                onTasksBarToggle={toggleTasksBarExpanded}
                 onPermissionModeChange={setPermissionMode}
                 onSubmit={sendMessage}
               />
@@ -2026,6 +2028,8 @@ export default function AgentPage({
 
               <AgentComposer
                 ref={composerRef}
+                subagentTasks={subagentTasks}
+                tasksBarExpanded={tasksBarExpanded}
                 activeModelDisplayName={activeModel?.displayName || "Model"}
                 modelKeyMissing={modelKeyMissing}
                 permissionView={permissionView}
@@ -2037,6 +2041,7 @@ export default function AgentPage({
                 onAttachFilesActivity={pushActivity}
                 onInterrupt={interrupt}
                 onModelSettingsOpen={openModelSettings}
+                onTasksBarToggle={toggleTasksBarExpanded}
                 onPermissionModeChange={setPermissionMode}
                 onSubmit={sendMessage}
               />
@@ -2188,6 +2193,8 @@ export default function AgentPage({
 
               <AgentComposer
                 ref={composerRef}
+                subagentTasks={subagentTasks}
+                tasksBarExpanded={tasksBarExpanded}
                 activeModelDisplayName={activeModel?.displayName || "Model"}
                 modelKeyMissing={modelKeyMissing}
                 permissionView={permissionView}
@@ -2199,6 +2206,7 @@ export default function AgentPage({
                 onAttachFilesActivity={pushActivity}
                 onInterrupt={interrupt}
                 onModelSettingsOpen={openModelSettings}
+                onTasksBarToggle={toggleTasksBarExpanded}
                 onPermissionModeChange={setPermissionMode}
                 onSubmit={sendMessage}
               />
@@ -2263,6 +2271,47 @@ export default function AgentPage({
             if (model) setSelectedModel(model.defaultModel);
           }}
         />
+
+        <Dialog
+          open={Boolean(activeApproval)}
+          onOpenChange={(open) => {
+            if (!open && activeApproval) {
+              showNotice({ tone: "warning", title: "需要先处理审批", detail: "请选择允许一次或拒绝。" });
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>待审批工具调用</DialogTitle>
+              <DialogDescription>当前工具调用正在等待你的确认，处理后会继续执行本轮会话。</DialogDescription>
+            </DialogHeader>
+            {activeApproval ? (
+              <div className="approval-dialog-body">
+                <div className="approval-dialog-summary">
+                  <strong>{activeApproval.toolName}</strong>
+                  <span>{activeApproval.summary}</span>
+                </div>
+              </div>
+            ) : null}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!activeApproval}
+                onClick={() => activeApproval && void resolveApproval(activeApproval, "rejected")}
+              >
+                拒绝
+              </Button>
+              <Button
+                type="button"
+                disabled={!activeApproval}
+                onClick={() => activeApproval && void resolveApproval(activeApproval, "approved")}
+              >
+                允许一次
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={workspaceModalOpen} onOpenChange={setWorkspaceModalOpen}>
           <DialogContent>
@@ -2441,6 +2490,8 @@ function AgentEmptyState({
 }
 
 interface AgentComposerProps {
+  subagentTasks: SubagentTask[];
+  tasksBarExpanded: boolean;
   activeModelDisplayName: string;
   modelKeyMissing: boolean;
   permissionView: ReturnType<typeof permissionDisplay>;
@@ -2452,11 +2503,14 @@ interface AgentComposerProps {
   onAttachFilesActivity: AgentPageProps["pushActivity"];
   onInterrupt: () => Promise<void>;
   onModelSettingsOpen: () => void;
+  onTasksBarToggle: () => void;
   onPermissionModeChange: (mode: PermissionMode) => void;
   onSubmit: (input: string, images: ImageAttachment[]) => Promise<boolean>;
 }
 
 const AgentComposer = memo(forwardRef<AgentComposerHandle, AgentComposerProps>(function AgentComposer({
+  subagentTasks,
+  tasksBarExpanded,
   activeModelDisplayName,
   modelKeyMissing,
   permissionView,
@@ -2468,6 +2522,7 @@ const AgentComposer = memo(forwardRef<AgentComposerHandle, AgentComposerProps>(f
   onAttachFilesActivity,
   onInterrupt,
   onModelSettingsOpen,
+  onTasksBarToggle,
   onPermissionModeChange,
   onSubmit,
 }, ref) {
@@ -2564,8 +2619,8 @@ const AgentComposer = memo(forwardRef<AgentComposerHandle, AgentComposerProps>(f
     onAttachFilesActivity("添加文件上下文", "success", files.length === 1 ? files[0] : `${files.length} 个文件`);
   }
 
-  function handlePaste(event: React.ClipboardEvent<HTMLTextAreaElement>) {
-    const files = event.clipboardData.files;
+  function handlePaste(event: ClipboardEvent) {
+    const files = event.clipboardData?.files;
     if (!files || files.length === 0) return;
     const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"));
     if (imageFiles.length === 0) return;
@@ -2589,6 +2644,11 @@ const AgentComposer = memo(forwardRef<AgentComposerHandle, AgentComposerProps>(f
 
   return (
     <footer className="composer">
+      <TasksBar
+        tasks={subagentTasks}
+        expanded={tasksBarExpanded}
+        onToggle={onTasksBarToggle}
+      />
       {queueLength ? (
         <div className="queue-strip">
           <span className="queue-dot" /> 已排队 {queueLength} 条输入
@@ -2642,6 +2702,7 @@ const AgentComposer = memo(forwardRef<AgentComposerHandle, AgentComposerProps>(f
             setComposer(text);
             setSelectedSuggestionIndex(0);
           }}
+          onPaste={handlePaste}
           onEnter={() => {
             if (showSuggestions) {
               if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < suggestions.length) {
@@ -3239,22 +3300,13 @@ function toolOnlyTraceSection(
   };
 }
 
-type TurnTraceRow =
-  | {
-    type: "thought";
-    id: string;
-    kind: ThinkingTraceItem["kind"];
-    status: ThinkingTraceItem["status"];
-    label: string;
-    title: string;
-    detail?: string;
-    createdAt?: number;
-  }
+type TurnTraceDetailRow =
   | {
     type: "tool";
     id: string;
     status: ToolTraceCardModel["status"];
     kind: ToolTraceCardModel["kind"];
+    name: string;
     label: string;
     detail?: string;
     outputPreview?: string;
@@ -3271,6 +3323,25 @@ type TurnTraceRow =
     detail?: string;
     approval: Approval;
     createdAt?: number;
+    completedAt?: number;
+  };
+
+type TurnTraceStreamEntry =
+  | {
+    type: "thought";
+    id: string;
+    item: ThinkingTraceItem;
+    createdAt?: number;
+    completedAt?: number;
+  }
+  | {
+    type: "toolGroup";
+    id: string;
+    rows: TurnTraceDetailRow[];
+    summary: string;
+    status: ToolTraceCardModel["status"];
+    createdAt?: number;
+    completedAt?: number;
   };
 
 function TurnTracePanel({
@@ -3299,8 +3370,11 @@ function TurnTracePanel({
     ? rawItems.filter((item) => item.kind !== "tool")
     : rawItems;
   const compactItems = compactModelProcessItems(processItems, TRACE_THOUGHT_VISIBLE_LIMIT);
-  const timelineRows = composeTurnTraceRows(compactItems.items, toolCards, approvals);
-  const headline = thinkingTraceHeadline(section);
+  const toolDetailRows = composeTurnTraceDetailRows(toolCards, approvals);
+  const traceEntries = composeTurnTraceStreamEntries(compactItems.items, toolDetailRows);
+  const toolSummary = compactTurnTraceToolSummary(toolCards, approvals);
+  const [traceNow, setTraceNow] = useState(() => Date.now());
+  const headline = turnTraceHeadline(section, traceNow);
   const summary = [
     section.summary,
     !section.summary && toolCards.length > 0 ? `工具 ${toolCards.length} 个` : "",
@@ -3309,22 +3383,40 @@ function TurnTracePanel({
   const traceCardRef = useRef<HTMLDivElement>(null);
   const [tracePinnedToBottom, setTracePinnedToBottom] = useState(true);
   const [showTraceJump, setShowTraceJump] = useState(false);
-  const [expandedTimelineRows, setExpandedTimelineRows] = useState<Record<string, boolean>>({});
   const traceContentSignature = useMemo(() => [
     section.status,
     headline,
     summary,
-    timelineRows.map((row) => [
-      row.id,
-      row.type,
-      row.status,
-      row.label.length,
-      row.type === "thought" ? row.kind : "",
-      row.type === "thought" ? row.title.length : 0,
-      row.detail?.length || 0,
-      row.type === "tool" ? row.outputPreview?.length || 0 : 0,
-    ].join(":")).join("|"),
-  ].join("::"), [headline, section.status, summary, timelineRows]);
+    traceEntries.map((entry) => (
+      entry.type === "thought"
+        ? [
+          entry.id,
+          entry.item.kind,
+          entry.item.status,
+          entry.item.title.length,
+          entry.item.detail?.length || 0,
+        ].join(":")
+        : [
+          entry.id,
+          entry.status,
+          entry.summary,
+          entry.rows.map((row) => [
+            row.id,
+            row.status,
+            row.label.length,
+            row.detail?.length || 0,
+            row.type === "tool" ? row.outputPreview?.length || 0 : 0,
+          ].join(":")).join(","),
+        ].join(":")
+    )).join("|"),
+  ].join("::"), [headline, section.status, summary, traceEntries]);
+
+  useEffect(() => {
+    if (section.status !== "running") return;
+    setTraceNow(Date.now());
+    const timer = setInterval(() => setTraceNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [section.status, section.startedAt]);
 
   const handleTraceScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
     const pinned = isNearScrollBottom(event.currentTarget);
@@ -3343,10 +3435,6 @@ function TurnTracePanel({
     setTracePinnedToBottom(true);
     setShowTraceJump(false);
   }, [expanded]);
-
-  useEffect(() => {
-    setExpandedTimelineRows({});
-  }, [section.turnId]);
 
   useLayoutEffect(() => {
     const element = traceCardRef.current;
@@ -3369,77 +3457,52 @@ function TurnTracePanel({
         type="button"
         onClick={onToggle}
       >
-        <Sparkles className="turn-trace-icon" size={17} />
-        <span className="turn-trace-heading">Trace</span>
-        <span className="turn-trace-summary">{headline}{summary ? ` · ${summary}` : ""}</span>
+        <Sparkles
+          className={[
+            "turn-trace-icon",
+            section.status === "running" ? "is-live" : "",
+          ].filter(Boolean).join(" ")}
+          size={17}
+        />
+        <span
+          className={[
+            "turn-trace-heading",
+            section.status === "running" ? "is-live" : "",
+          ].filter(Boolean).join(" ")}
+        >
+          {headline}
+        </span>
+        <span className="turn-trace-summary">{summary}</span>
         <TraceTokenUsage tokenUsage={tokenUsage} />
         <ChevronDown className="turn-trace-chevron" size={15} />
       </button>
       {expanded ? (
         <div className="turn-trace-card-wrap">
           <div className="turn-trace-card" ref={traceCardRef} onScroll={handleTraceScroll}>
-            <div className="turn-trace-current">
-              <strong>{headline}</strong>
-              {summary ? <small>{summary}</small> : null}
+            <div className="turn-trace-stream">
+              {toolSummary ? (
+                <TurnTraceMetaRow
+                  status={toolDetailRows.some((row) => row.status === "waiting_approval") ? "waiting_approval" : section.status}
+                  summary={toolSummary}
+                />
+              ) : null}
+              {compactItems.hiddenCount > 0 ? (
+                <small className="turn-trace-hidden-count">已收起 {compactItems.hiddenCount} 条较早进度</small>
+              ) : null}
+              {traceEntries.map((entry) => {
+                if (entry.type === "thought") {
+                  const item = entry.item;
+                  return <TurnTraceThought item={item} key={entry.id} />;
+                }
+                return (
+                  <TurnTraceToolGroup
+                    entry={entry}
+                    key={entry.id}
+                    onResolveApproval={onResolveApproval}
+                  />
+                );
+              })}
             </div>
-            {timelineRows.length > 0 ? (
-              <div className="turn-trace-section">
-                <div className="turn-trace-section-title">
-                  <span>时间线</span>
-                  {compactItems.hiddenCount > 0 ? <small>已收起 {compactItems.hiddenCount} 条较早进度</small> : null}
-                </div>
-                <div className="turn-trace-stream">
-                  {timelineRows.map((row) => {
-                    if (row.type === "thought") {
-                      return (
-                        <div className={`turn-trace-thought is-${row.status} is-${row.kind}`} key={row.id}>
-                          <span className="turn-trace-dot" />
-                          <div className={`turn-trace-copy ${row.kind === "reasoning" ? "is-reasoning" : ""}`}>
-                            <div className="turn-trace-item-meta">
-                              <span>{row.label}</span>
-                              <small>{traceStatusLabel(row.status)}</small>
-                            </div>
-                            {row.kind === "reasoning" ? (
-                              <TraceThoughtText text={row.title} />
-                            ) : (
-                              <span className="turn-trace-item-title">{row.title}</span>
-                            )}
-                            {row.detail ? <small className="turn-trace-item-detail">{row.detail}</small> : null}
-                          </div>
-                        </div>
-                      );
-                    }
-                    const rowIcon = row.type === "tool" ? (
-                      <TerminalSquare className="turn-trace-row-icon" size={14} />
-                    ) : row.type === "approval" ? (
-                      <Shield className="turn-trace-row-icon" size={14} />
-                    ) : null;
-                    return (
-                      <div
-                        className={`turn-trace-row-action is-${row.type} is-${row.status} ${expandedTimelineRows[row.id] ? "is-open" : ""}`}
-                        key={row.id}
-                      >
-                        <button
-                          aria-expanded={Boolean(expandedTimelineRows[row.id])}
-                          className="turn-trace-row-action-button"
-                          type="button"
-                          onClick={() => setExpandedTimelineRows((current) => ({ ...current, [row.id]: !current[row.id] }))}
-                        >
-                          {rowIcon}
-                          <span className="turn-trace-row-title" title={row.label}>{row.label}</span>
-                          {row.detail ? <span className="turn-trace-row-summary" title={row.detail}>{row.detail}</span> : <span className="turn-trace-row-summary" />}
-                          {row.status !== "completed" ? <span className="turn-trace-row-status">{toolTraceStatusLabel(row.status)}</span> : null}
-                          <ChevronDown className="turn-trace-row-chevron" size={14} />
-                        </button>
-                        {expandedTimelineRows[row.id] ? (
-                          <TurnTraceTimelineDetail row={row} onResolveApproval={onResolveApproval} />
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
           </div>
           {showTraceJump ? (
             <button
@@ -3457,11 +3520,71 @@ function TurnTracePanel({
   );
 }
 
+function TurnTraceMetaRow({
+  status,
+  summary,
+}: {
+  status: ThinkingTraceSection["status"] | ToolTraceCardModel["status"];
+  summary: string;
+}) {
+  return (
+    <div className={`turn-trace-meta-row is-${status}`}>
+      <TerminalSquare className="turn-trace-meta-icon" size={15} />
+      <span>{summary}</span>
+    </div>
+  );
+}
+
+function TurnTraceThought({ item }: { item: ThinkingTraceItem }) {
+  return (
+    <div className={`turn-trace-thought-text is-${item.status} is-${item.kind}`}>
+      {item.kind === "reasoning" ? (
+        <TraceThoughtText text={item.title} />
+      ) : (
+        <p>{item.title}</p>
+      )}
+      {item.detail ? <small className="turn-trace-item-detail">{item.detail}</small> : null}
+    </div>
+  );
+}
+
+function TurnTraceToolGroup({
+  entry,
+  onResolveApproval,
+}: {
+  entry: Extract<TurnTraceStreamEntry, { type: "toolGroup" }>;
+  onResolveApproval: (approval: Approval, decision: string) => Promise<void>;
+}) {
+  return (
+    <details className="turn-trace-tool-details">
+      <summary className="turn-trace-tool-summary">
+        <TurnTraceMetaRow status={entry.status} summary={entry.summary} />
+      </summary>
+        <div className="turn-trace-tool-detail-list">
+          {entry.rows.map((row) => (
+            <div className={`turn-trace-tool-detail-item is-${row.status}`} key={row.id}>
+              <div className="turn-trace-tool-detail-head">
+                {row.type === "approval" ? (
+                  <Shield className="turn-trace-row-icon" size={14} />
+                ) : (
+                  <TerminalSquare className="turn-trace-row-icon" size={14} />
+                )}
+                <span title={row.label}>{row.label}</span>
+                {row.status !== "completed" ? <small>{toolTraceStatusLabel(row.status)}</small> : null}
+              </div>
+              <TurnTraceTimelineDetail row={row} onResolveApproval={onResolveApproval} />
+            </div>
+          ))}
+        </div>
+    </details>
+  );
+}
+
 function TurnTraceTimelineDetail({
   row,
   onResolveApproval,
 }: {
-  row: Exclude<TurnTraceRow, { type: "thought" }>;
+  row: TurnTraceDetailRow;
   onResolveApproval: (approval: Approval, decision: string) => Promise<void>;
 }) {
   if (row.type === "tool") {
@@ -3563,38 +3686,101 @@ function TraceThoughtText({ text }: { text: string }) {
   );
 }
 
-function composeTurnTraceRows(
-  items: ThinkingTraceItem[],
+function composeTurnTraceDetailRows(
   toolCards: ToolTraceCardModel[],
   approvals: Approval[] = [],
-): TurnTraceRow[] {
-  const thoughtRows: TurnTraceRow[] = items.map((item, index) => ({
-    type: "thought",
-    id: `thought:${item.id}`,
-    kind: item.kind,
-    status: item.status,
-    label: modelProcessItemLabel(item, items.slice(0, index)),
-    title: item.title,
-    detail: item.detail,
-    createdAt: item.createdAt,
-  }));
+): TurnTraceDetailRow[] {
   return [
-    ...thoughtRows,
-    ...toolCards.map(toolTraceCardToTimelineRow),
-    ...approvals.map(approvalToTimelineRow),
-  ].sort(compareTurnTraceRows);
+    ...toolCards.map(toolTraceCardToDetailRow),
+    ...approvals.map(approvalToDetailRow),
+  ].sort(compareTurnTraceDetailRows);
 }
 
-function compareTurnTraceRows(a: TurnTraceRow, b: TurnTraceRow) {
+function composeTurnTraceStreamEntries(
+  items: ThinkingTraceItem[],
+  detailRows: TurnTraceDetailRow[],
+): TurnTraceStreamEntry[] {
+  type PendingEntry =
+    | {
+      type: "thought";
+      id: string;
+      item: ThinkingTraceItem;
+      timestamp: number;
+      order: number;
+    }
+    | {
+      type: "detail";
+      id: string;
+      row: TurnTraceDetailRow;
+      timestamp: number;
+      order: number;
+    };
+
+  const pendingEntries: PendingEntry[] = [
+    ...items.map((item, index) => ({
+      type: "thought" as const,
+      id: `thought:${item.id}`,
+      item,
+      timestamp: traceEntryTimestamp(item),
+      order: index * 2,
+    })),
+    ...detailRows.map((row, index) => ({
+      type: "detail" as const,
+      id: row.id,
+      row,
+      timestamp: traceEntryTimestamp(row),
+      order: index * 2 + 1,
+    })),
+  ].sort((a, b) => a.timestamp - b.timestamp || a.order - b.order || a.id.localeCompare(b.id));
+
+  const entries: TurnTraceStreamEntry[] = [];
+  for (const pending of pendingEntries) {
+    if (pending.type === "thought") {
+      entries.push({
+        type: "thought",
+        id: pending.id,
+        item: pending.item,
+        createdAt: pending.item.createdAt,
+        completedAt: pending.item.completedAt,
+      });
+      continue;
+    }
+
+    const previous = entries.at(-1);
+    if (previous?.type === "toolGroup") {
+      const rows = [...previous.rows, pending.row];
+      previous.rows = rows;
+      previous.summary = compactTurnTraceDetailSummary(rows);
+      previous.status = turnTraceDetailGroupStatus(rows);
+      previous.completedAt = pending.row.completedAt ?? previous.completedAt;
+      continue;
+    }
+
+    entries.push({
+      type: "toolGroup",
+      id: `tool-group:${pending.row.id}`,
+      rows: [pending.row],
+      summary: compactTurnTraceDetailSummary([pending.row]),
+      status: turnTraceDetailGroupStatus([pending.row]),
+      createdAt: pending.row.createdAt,
+      completedAt: pending.row.completedAt,
+    });
+  }
+
+  return entries;
+}
+
+function compareTurnTraceDetailRows(a: TurnTraceDetailRow, b: TurnTraceDetailRow) {
   return (a.createdAt ?? 0) - (b.createdAt ?? 0) || a.id.localeCompare(b.id);
 }
 
-function toolTraceCardToTimelineRow(card: ToolTraceCardModel): Extract<TurnTraceRow, { type: "tool" }> {
+function toolTraceCardToDetailRow(card: ToolTraceCardModel): Extract<TurnTraceDetailRow, { type: "tool" }> {
   return {
     type: "tool",
     id: `tool:${card.id}`,
     status: card.status,
     kind: card.kind,
+    name: card.name,
     label: toolTraceRowLabel(card),
     detail: toolTraceRowDetail(card),
     outputPreview: card.outputPreview,
@@ -3604,7 +3790,7 @@ function toolTraceCardToTimelineRow(card: ToolTraceCardModel): Extract<TurnTrace
   };
 }
 
-function approvalToTimelineRow(approval: Approval): Extract<TurnTraceRow, { type: "approval" }> {
+function approvalToDetailRow(approval: Approval): Extract<TurnTraceDetailRow, { type: "approval" }> {
   return {
     type: "approval",
     id: `approval:${approval.id}`,
@@ -3614,7 +3800,64 @@ function approvalToTimelineRow(approval: Approval): Extract<TurnTraceRow, { type
     detail: approval.summary,
     approval,
     createdAt: approval.createdAt,
+    completedAt: approval.resolvedAt,
   };
+}
+
+function compactTurnTraceToolSummary(
+  toolCards: ToolTraceCardModel[],
+  approvals: Approval[] = [],
+) {
+  const groups = new Map<string, number>();
+
+  for (const card of toolCards) {
+    const label = toolNameCompactLabel(card.name);
+    groups.set(label, (groups.get(label) || 0) + 1);
+  }
+
+  if (approvals.length > 0) {
+    groups.set("审批", (groups.get("审批") || 0) + approvals.length);
+  }
+
+  return [...groups.entries()]
+    .map(([label, count]) => count > 1 ? `${label} ×${count}` : label)
+    .join(" · ");
+}
+
+function compactTurnTraceDetailSummary(rows: TurnTraceDetailRow[]) {
+  const groups = new Map<string, number>();
+  for (const row of rows) {
+    const label = row.type === "approval" ? "审批" : toolNameCompactLabel(row.name);
+    groups.set(label, (groups.get(label) || 0) + 1);
+  }
+  return [...groups.entries()]
+    .map(([label, count]) => count > 1 ? `${label} ×${count}` : label)
+    .join(" · ");
+}
+
+function toolNameCompactLabel(name: string) {
+  if (name === "read_file" || name === "list_files") return "已读取文件";
+  if (name === "write_file") return "已写入文件";
+  if (name === "edit_file") return "已编辑文件";
+  if (name === "search" || name === "grep" || name === "glob") return "已搜索";
+  if (name === "shell") return "已运行命令";
+  if (name === "mcp_call") return "已调用 MCP";
+  if (name.startsWith("git_")) return "已执行 Git";
+  if (name === "task_update") return "已更新任务";
+  return "已调用工具";
+}
+
+function turnTraceDetailGroupStatus(rows: TurnTraceDetailRow[]): ToolTraceCardModel["status"] {
+  if (rows.some((row) => row.status === "waiting_approval")) return "waiting_approval";
+  if (rows.some((row) => row.status === "running" || row.status === "pending")) return "running";
+  if (rows.some((row) => row.status === "error")) return "error";
+  if (rows.some((row) => row.status === "rejected")) return "rejected";
+  if (rows.some((row) => row.status === "cancelled")) return "cancelled";
+  return "completed";
+}
+
+function traceEntryTimestamp(entry: ThinkingTraceItem | TurnTraceDetailRow) {
+  return entry.createdAt ?? entry.completedAt ?? Number.MAX_SAFE_INTEGER;
 }
 
 function isProminentToolTrace(card: ToolTraceCardModel) {
@@ -3683,28 +3926,6 @@ function compactModelProcessItems(items: ThinkingTraceItem[], limit = TRACE_THOU
 
   const visibleItems = items.filter((item) => selected.has(item.id)).slice(-limit);
   return { items: visibleItems, hiddenCount: items.length - visibleItems.length };
-}
-
-function modelProcessItemLabel(item: ThinkingTraceItem, previousItems: ThinkingTraceItem[]) {
-  const sameKindIndex = previousItems.filter((previous) => previous.kind === item.kind).length + 1;
-  if (item.kind === "reasoning") return `思考 ${sameKindIndex}`;
-  if (item.kind === "note") return `进度 ${sameKindIndex}`;
-  if (item.kind === "tool") return `工具 ${sameKindIndex}`;
-  return `步骤 ${sameKindIndex}`;
-}
-
-function traceStatusLabel(status: ThinkingTraceItem["status"]) {
-  if (status === "running") return "运行中";
-  if (status === "error") return "失败";
-  if (status === "pending") return "等待中";
-  return "完成";
-}
-
-function thinkingTraceHeadline(section: ThinkingTraceSection) {
-  if (section.status === "running") return "处理中...";
-  if (section.status === "error") return "处理失败";
-  if (section.status === "pending") return "等待处理";
-  return section.durationLabel ? `已处理 ${section.durationLabel}` : "已处理";
 }
 
 function tokenUsageByTurnFromDetail(detail?: ThreadDetail) {

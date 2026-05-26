@@ -20,6 +20,7 @@
 | 6 | 悬浮用户消息回看 | [P1-06-sticky-user-message.md](P1-06-sticky-user-message.md) | 滚出视口的用户消息顶部悬浮显示 |
 | 7 | 文件路径芯片 | [P1-07-file-path-chip.md](P1-07-file-path-chip.md) | 行内代码中识别文件路径，点击打开 |
 | 8 | 思考过程折叠面板 | [P1-08-reasoning-collapsible.md](P1-08-reasoning-collapsible.md) | 流式自动展开、结束 1s 折叠、计时 |
+| 16 | Portal 用量管理与会话管理 | [P1-16-portal-usage-session-management.md](P1-16-portal-usage-session-management.md) | 本机用量统计 + 多模型会话管理 |
 
 ## P2 — 布局与交互增强
 

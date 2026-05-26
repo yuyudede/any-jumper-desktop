@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, safeStorage, shell } from "electron";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import * as pty from "node-pty";
@@ -37,12 +37,18 @@ import type {
   SkillSummary,
   ThreadCreateRequest,
   ThreadDetail,
+  ThreadArchiveFilter,
   ToolCall,
   ToolCallEvent,
   ToolTraceKind,
   ToolTraceStatus,
   TurnTokenUsage,
   TurnStartRequest,
+  NormalizedUsageEvent,
+  UsageDashboardData,
+  UsageDashboardRequest,
+  UsageSyncResult,
+  UsageSyncState,
   Workspace,
   WorkspaceRequest,
 } from "../src/types";
@@ -50,6 +56,14 @@ import { parseGitStatusEntries } from "../src/utils/gitStatus";
 import { extractModelOutputParts, stripExposedThinking } from "../src/utils/modelReasoning";
 import { truncateTraceThoughtText } from "../src/utils/traceThoughtText";
 import { TurnOutputClassifier, type TurnOutputSegment } from "../src/utils/turnOutputClassifier";
+import {
+  claudeCodeUsageEventsFromJsonl,
+  codexUsageEventsFromJsonl,
+  groupUsageByModel,
+  groupUsageBySession,
+  summarizeUsage,
+  type ExternalUsageEvent,
+} from "../src/utils/usageStats";
 import { AgentBridgeService } from "./agentBridge";
 import { enableDeepSeekReasoningRoundTrip } from "../src/utils/deepseekReasoningRoundTrip";
 import { DEFAULT_MAIN_WINDOW_SHORTCUT, DEFAULT_PORTAL_SHORTCUT } from "../src/utils/portalDefaults";
@@ -551,6 +565,34 @@ class StorageService {
         created_at INTEGER NOT NULL,
         PRIMARY KEY(thread_id, turn_id, path)
       );
+      CREATE TABLE IF NOT EXISTS external_usage_events (
+        id TEXT PRIMARY KEY,
+        source TEXT NOT NULL,
+        session_id TEXT,
+        workspace_path TEXT,
+        workspace_name TEXT,
+        file_path TEXT NOT NULL,
+        event_key TEXT NOT NULL,
+        model TEXT NOT NULL,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+        cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+        total_tokens INTEGER NOT NULL DEFAULT 0,
+        occurred_at INTEGER NOT NULL,
+        raw_json TEXT,
+        created_at INTEGER NOT NULL,
+        UNIQUE(source, file_path, event_key)
+      );
+      CREATE TABLE IF NOT EXISTS external_usage_sync_state (
+        source TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        file_mtime INTEGER NOT NULL DEFAULT 0,
+        file_size INTEGER NOT NULL DEFAULT 0,
+        last_synced_at INTEGER NOT NULL,
+        error_message TEXT,
+        PRIMARY KEY(source, file_path)
+      );
     `);
     this.ensureColumn("workspaces", "default_runtime_id", "TEXT NOT NULL DEFAULT 'deepagents'");
     this.ensureColumn("threads", "runtime_id", "TEXT NOT NULL DEFAULT 'deepagents'");
@@ -565,6 +607,10 @@ class StorageService {
     this.ensureColumn("progress_notes", "kind", "TEXT NOT NULL DEFAULT 'progress'");
     this.ensureColumn("items", "images_json", "TEXT");
     this.ensureColumn("items", "reasoning_content", "TEXT");
+    this.ensureColumn("external_usage_events", "workspace_path", "TEXT");
+    this.ensureColumn("external_usage_events", "workspace_name", "TEXT");
+    this.ensureColumn("mcp_servers", "headers_json", "TEXT");
+    this.ensureColumn("mcp_servers", "timeout", "INTEGER");
   }
 
   private ensureColumn(table: string, column: string, definition: string) {
@@ -671,6 +717,11 @@ class StorageService {
     return mapWorkspace(this.db.prepare("SELECT * FROM workspaces WHERE id=?").get(id));
   }
 
+  private findWorkspace(id: string): Workspace | undefined {
+    const row = this.db.prepare("SELECT * FROM workspaces WHERE id=?").get(id);
+    return row ? mapWorkspace(row) : undefined;
+  }
+
   listModelConfigs(): ModelConfig[] {
     return this.db.prepare("SELECT * FROM model_configs ORDER BY display_name ASC").all().map(mapModelConfig);
   }
@@ -768,10 +819,17 @@ class StorageService {
     return this.getThread(id);
   }
 
-  listThreads(workspaceId?: string): AgentThread[] {
-    const rows = workspaceId
-      ? this.db.prepare("SELECT * FROM threads WHERE workspace_id=? AND archived=0 ORDER BY updated_at DESC").all(workspaceId)
-      : this.db.prepare("SELECT * FROM threads WHERE archived=0 ORDER BY updated_at DESC").all();
+  listThreads(workspaceId?: string, archiveFilter: ThreadArchiveFilter = "active"): AgentThread[] {
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+    if (workspaceId) {
+      clauses.push("workspace_id=?");
+      params.push(workspaceId);
+    }
+    if (archiveFilter === "active") clauses.push("archived=0");
+    if (archiveFilter === "archived") clauses.push("archived=1");
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const rows = this.db.prepare(`SELECT * FROM threads ${where} ORDER BY updated_at DESC`).all(...params);
     return rows.map(mapThread);
   }
 
@@ -798,6 +856,273 @@ class StorageService {
 
   archiveThread(id: string) {
     this.db.prepare("UPDATE threads SET archived=1, updated_at=? WHERE id=?").run(nowMillis(), id);
+  }
+
+  unarchiveThread(id: string) {
+    this.db.prepare("UPDATE threads SET archived=0, updated_at=? WHERE id=?").run(nowMillis(), id);
+  }
+
+  usageDashboard(request: UsageDashboardRequest = {}): UsageDashboardData {
+    const workspace = request.workspaceId ? this.findWorkspace(request.workspaceId) : undefined;
+    const events = this.filterUsageEvents([
+      ...this.anyJumperUsageEvents(),
+      ...this.externalUsageEvents(),
+    ], request, workspace);
+    return {
+      summary: summarizeUsage(events),
+      modelBreakdown: groupUsageByModel(events),
+      sessionBreakdown: groupUsageBySession(events),
+      events: events.sort((a, b) => b.occurredAt - a.occurredAt),
+      syncState: this.externalUsageSyncState(),
+    };
+  }
+
+  syncExternalUsage(): UsageSyncResult {
+    const importedCount = this.syncCodexUsage() + this.syncClaudeCodeUsage();
+    return {
+      importedCount,
+      syncState: this.externalUsageSyncState(),
+    };
+  }
+
+  private anyJumperUsageEvents(): NormalizedUsageEvent[] {
+    const rows = this.db.prepare(`
+      SELECT
+        t.id AS turn_id,
+        t.provider_id AS turn_provider_id,
+        t.model AS turn_model,
+        t.started_at,
+        t.completed_at,
+        t.token_usage_json,
+        th.id AS thread_id,
+        th.title AS thread_title,
+        th.workspace_id,
+        w.name AS workspace_name,
+        w.root_path AS workspace_path,
+        mc.provider_kind,
+        mc.display_name AS provider_label
+      FROM turns t
+      JOIN threads th ON th.id=t.thread_id
+      LEFT JOIN workspaces w ON w.id=th.workspace_id
+      LEFT JOIN model_configs mc ON mc.id=t.provider_id
+      WHERE t.token_usage_json IS NOT NULL AND t.token_usage_json <> ''
+      ORDER BY COALESCE(t.completed_at, t.started_at) DESC
+    `).all();
+    return rows.flatMap((row: any) => {
+      const usage = jsonParse<TurnTokenUsage | undefined>(row.token_usage_json, undefined);
+      if (!usage) return [];
+      return [{
+        id: `any_jumper:${row.turn_id}`,
+        source: "any_jumper",
+        providerKind: row.provider_kind ?? undefined,
+        providerId: row.turn_provider_id ?? undefined,
+        providerLabel: row.provider_label ?? row.turn_provider_id ?? undefined,
+        model: row.turn_model || "unknown",
+        sessionId: row.thread_id ?? undefined,
+        sessionTitle: row.thread_title ?? undefined,
+        workspaceId: row.workspace_id ?? undefined,
+        workspaceName: row.workspace_name ?? undefined,
+        workspacePath: row.workspace_path ?? undefined,
+        inputTokens: safeUsageToken(usage.inputTokens),
+        outputTokens: safeUsageToken(usage.outputTokens),
+        cacheCreationTokens: safeUsageToken(usage.cacheCreation),
+        cacheReadTokens: safeUsageToken(usage.cacheRead),
+        totalTokens: safeUsageToken(usage.totalTokens),
+        occurredAt: row.completed_at ?? row.started_at ?? 0,
+        rawJson: usage,
+      } satisfies NormalizedUsageEvent];
+    });
+  }
+
+  private externalUsageEvents(): NormalizedUsageEvent[] {
+    return this.db.prepare(`
+      SELECT * FROM external_usage_events ORDER BY occurred_at DESC
+    `).all().map((row: any) => ({
+      id: row.id,
+      source: row.source,
+      providerKind: row.source === "claude_code" ? "anthropic" : "codex",
+      providerId: row.source,
+      providerLabel: row.source === "claude_code" ? "Claude Code" : "Codex CLI",
+      model: row.model || "unknown",
+      sessionId: row.session_id ?? undefined,
+      sessionTitle: row.session_id ?? path.basename(row.file_path),
+      workspaceName: row.workspace_name ?? undefined,
+      workspacePath: row.workspace_path ?? undefined,
+      inputTokens: safeUsageToken(row.input_tokens),
+      outputTokens: safeUsageToken(row.output_tokens),
+      cacheCreationTokens: safeUsageToken(row.cache_creation_tokens),
+      cacheReadTokens: safeUsageToken(row.cache_read_tokens),
+      totalTokens: safeUsageToken(row.total_tokens),
+      occurredAt: row.occurred_at ?? 0,
+      rawJson: jsonParse(row.raw_json, undefined),
+    })) as NormalizedUsageEvent[];
+  }
+
+  private filterUsageEvents(events: NormalizedUsageEvent[], request: UsageDashboardRequest, workspace?: Workspace): NormalizedUsageEvent[] {
+    const source = request.source || "all";
+    const query = request.query?.trim().toLowerCase();
+    return events.filter((event) => {
+      if (source !== "all" && event.source !== source) return false;
+      if (request.workspaceId && !workspaceMatchesUsageEvent(event, request.workspaceId, workspace)) return false;
+      if (request.model && event.model !== request.model) return false;
+      if (request.from && event.occurredAt < request.from) return false;
+      if (request.to && event.occurredAt > request.to) return false;
+      if (!query) return true;
+      return [
+        event.source,
+        event.providerKind,
+        event.providerId,
+        event.providerLabel,
+        event.model,
+        event.sessionId,
+        event.sessionTitle,
+        event.workspaceName,
+        event.workspacePath,
+      ].filter(Boolean).join(" ").toLowerCase().includes(query);
+    });
+  }
+
+  private syncCodexUsage() {
+    let imported = 0;
+    for (const root of [path.join(homedir(), ".codex", "sessions"), path.join(homedir(), ".codex", "archived_sessions")]) {
+      const discovered = collectJsonlFiles(root);
+      if (discovered.error) {
+        this.recordExternalSyncState("codex_cli", root, 0, 0, discovered.error);
+        continue;
+      }
+      for (const filePath of discovered.files) {
+        imported += this.syncCodexUsageFile(filePath);
+      }
+    }
+    return imported;
+  }
+
+  private syncClaudeCodeUsage() {
+    let imported = 0;
+    const root = path.join(homedir(), ".claude", "projects");
+    const discovered = collectJsonlFiles(root);
+    if (discovered.error) {
+      this.recordExternalSyncState("claude_code", root, 0, 0, discovered.error);
+      return imported;
+    }
+    for (const filePath of discovered.files) {
+      imported += this.syncClaudeCodeUsageFile(filePath);
+    }
+    return imported;
+  }
+
+  private syncCodexUsageFile(filePath: string) {
+    const fileInfo = safeStat(filePath);
+    try {
+      const parsed = codexUsageEventsFromJsonl(readFileSync(filePath, "utf8"), filePath);
+      const imported = this.replaceExternalUsageFile("codex_cli", filePath, parsed.events);
+      this.recordExternalSyncState("codex_cli", filePath, fileInfo.mtime, fileInfo.size, parsed.errors.join("; ") || undefined);
+      return imported;
+    } catch (error) {
+      this.recordExternalSyncState("codex_cli", filePath, fileInfo.mtime, fileInfo.size, errorMessageForSync(error));
+      return 0;
+    }
+  }
+
+  private syncClaudeCodeUsageFile(filePath: string) {
+    const fileInfo = safeStat(filePath);
+    try {
+      const parsed = claudeCodeUsageEventsFromJsonl(readFileSync(filePath, "utf8"), filePath);
+      const events = parsed.events.map((event) => ({
+        ...event,
+        occurredAt: event.occurredAt || fileInfo.mtime,
+      }));
+      const imported = this.replaceExternalUsageFile("claude_code", filePath, events);
+      this.recordExternalSyncState("claude_code", filePath, fileInfo.mtime, fileInfo.size, parsed.errors.join("; ") || undefined);
+      return imported;
+    } catch (error) {
+      this.recordExternalSyncState("claude_code", filePath, fileInfo.mtime, fileInfo.size, errorMessageForSync(error));
+      return 0;
+    }
+  }
+
+  private replaceExternalUsageFile(source: NormalizedUsageEvent["source"], filePath: string, events: ExternalUsageEvent[]) {
+    const replace = this.db.transaction(() => {
+      this.db.prepare("DELETE FROM external_usage_events WHERE source=? AND file_path=?").run(source, filePath);
+      return this.insertExternalUsageEvents(events);
+    });
+    return replace();
+  }
+
+  private insertExternalUsageEvents(events: ExternalUsageEvent[]) {
+    const stmt = this.db.prepare(`
+      INSERT INTO external_usage_events (
+        id, source, session_id, workspace_path, workspace_name, file_path, event_key, model, input_tokens, output_tokens,
+        cache_creation_tokens, cache_read_tokens, total_tokens, occurred_at, raw_json, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(source, file_path, event_key) DO UPDATE SET
+        session_id=excluded.session_id,
+        workspace_path=excluded.workspace_path,
+        workspace_name=excluded.workspace_name,
+        model=excluded.model,
+        input_tokens=excluded.input_tokens,
+        output_tokens=excluded.output_tokens,
+        cache_creation_tokens=excluded.cache_creation_tokens,
+        cache_read_tokens=excluded.cache_read_tokens,
+        total_tokens=excluded.total_tokens,
+        occurred_at=excluded.occurred_at,
+        raw_json=excluded.raw_json
+    `);
+    const now = nowMillis();
+    let imported = 0;
+    for (const event of events) {
+      const info = stmt.run(
+        externalUsageEventId(event),
+        event.source,
+        event.sessionId ?? null,
+        event.workspacePath ?? null,
+        event.workspaceName ?? null,
+        event.filePath,
+        event.eventKey,
+        event.model || "unknown",
+        safeUsageToken(event.inputTokens),
+        safeUsageToken(event.outputTokens),
+        safeUsageToken(event.cacheCreationTokens),
+        safeUsageToken(event.cacheReadTokens),
+        safeUsageToken(event.totalTokens),
+        event.occurredAt || now,
+        JSON.stringify(event.rawJson ?? null),
+        now,
+      );
+      imported += info.changes;
+    }
+    return imported;
+  }
+
+  private recordExternalSyncState(
+    source: NormalizedUsageEvent["source"],
+    filePath: string,
+    fileMtime: number,
+    fileSize: number,
+    errorMessage?: string,
+  ) {
+    this.db.prepare(`
+      INSERT INTO external_usage_sync_state (source, file_path, file_mtime, file_size, last_synced_at, error_message)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(source, file_path) DO UPDATE SET
+        file_mtime=excluded.file_mtime,
+        file_size=excluded.file_size,
+        last_synced_at=excluded.last_synced_at,
+        error_message=excluded.error_message
+    `).run(source, filePath, Math.trunc(fileMtime || 0), Math.trunc(fileSize || 0), nowMillis(), errorMessage ?? null);
+  }
+
+  private externalUsageSyncState(): UsageSyncState[] {
+    return this.db.prepare("SELECT * FROM external_usage_sync_state ORDER BY last_synced_at DESC")
+      .all()
+      .map((row: any) => ({
+        source: row.source,
+        filePath: row.file_path,
+        fileMtime: row.file_mtime,
+        fileSize: row.file_size,
+        lastSyncedAt: row.last_synced_at,
+        errorMessage: row.error_message ?? undefined,
+      }));
   }
 
   readThread(threadId: string): ThreadDetail {
@@ -991,15 +1316,20 @@ class StorageService {
     return mapMcp(this.db.prepare("SELECT * FROM mcp_servers WHERE id=?").get(id));
   }
 
+  deleteMcpServer(id: string) {
+    this.db.prepare("DELETE FROM mcp_servers WHERE id=?").run(id);
+  }
+
   saveMcpServer(request: McpServerRequest): McpServerConfig {
     const id = request.id ?? newId("mcp");
     const now = nowMillis();
     this.db.prepare(`
-      INSERT INTO mcp_servers (id, name, transport, command_json, url, env_json, enabled, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'idle', ?, ?)
+      INSERT INTO mcp_servers (id, name, transport, command_json, url, env_json, headers_json, timeout, enabled, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', ?, ?)
       ON CONFLICT(id) DO UPDATE SET name=excluded.name, transport=excluded.transport, command_json=excluded.command_json,
-        url=excluded.url, env_json=excluded.env_json, enabled=excluded.enabled, updated_at=excluded.updated_at
-    `).run(id, request.name, request.transport, request.commandJson ?? null, request.url ?? null, request.envJson ?? null, bool(request.enabled), now, now);
+        url=excluded.url, env_json=excluded.env_json, headers_json=excluded.headers_json, timeout=excluded.timeout,
+        enabled=excluded.enabled, updated_at=excluded.updated_at
+    `).run(id, request.name, request.transport, request.commandJson ?? null, request.url ?? null, request.envJson ?? null, request.headersJson ?? null, request.timeout ?? null, bool(request.enabled), now, now);
     return this.getMcpServer(id);
   }
 
@@ -1227,8 +1557,14 @@ class ToolService {
         return gitRun(ctx.workspaceRoot, ["pull", "--ff-only"], reporter);
       case "git_push":
         return gitRun(ctx.workspaceRoot, ["push"], reporter);
+      case "mcp_list_tools":
+        return JSON.stringify(await listMcpToolsForRuntime(input.serverId ?? input.server_id), null, 2);
       case "mcp_call":
         return JSON.stringify(await mcpCall(input.serverId ?? input.server_id, input.toolName ?? input.tool_name, input.input ?? {}, reporter), null, 2);
+      case "skill_list":
+        return JSON.stringify(skillListForRuntime(ctx.workspaceId), null, 2);
+      case "skill_read":
+        return readSkillForRuntime(ctx.workspaceId, input.path ?? input.id ?? input.name);
       case "task_update":
         reporter.progress("已更新任务状态");
         return JSON.stringify(input);
@@ -1351,6 +1687,7 @@ function eventPayload(
 type ToolContext = {
   threadId: string;
   turnId?: string;
+  workspaceId?: string;
   workspaceRoot: string;
   permissionMode: string;
 };
@@ -1587,8 +1924,7 @@ class AgentRuntimeService {
     }
     const model = createChatModel(modelConfig, ctx.model, ctx.reasoningEffort);
     const messages = modelVisibleMessages(ctx.thread.id);
-    const toolCtx: ToolContext = { threadId: ctx.thread.id, turnId: ctx.turn.id, workspaceRoot: ctx.workspace.rootPath, permissionMode: ctx.permissionMode };
-    const files = skillFiles(ctx.workspace.id);
+    const toolCtx: ToolContext = { threadId: ctx.thread.id, turnId: ctx.turn.id, workspaceId: ctx.workspace.id, workspaceRoot: ctx.workspace.rootPath, permissionMode: ctx.permissionMode };
     const agent = createDeepAgent({
       model,
       tools: [
@@ -1601,10 +1937,22 @@ class AgentRuntimeService {
         hostTool("git_pull", "执行 git pull --ff-only", z.object({}), toolCtx),
         hostTool("git_push", "执行 git push", z.object({}), toolCtx),
         hostTool("shell", "在工作区执行 shell 命令，可能需要用户审批", z.object({ command: z.string() }), toolCtx),
-        ...await mcpToolsForAgent(toolCtx),
+        hostTool("mcp_list_tools", "按需列出已启用 MCP server 和工具。需要操作 Obsidian、浏览器、Pencil 或其它外部能力时，先调用它获取 serverId 和 toolName。", z.object({ serverId: z.string().optional(), server_id: z.string().optional() }), toolCtx),
+        hostTool("mcp_call", "按 serverId 和 toolName 调用 MCP 工具。调用前应先用 mcp_list_tools 确认工具名；input 放工具参数对象。", z.object({
+          serverId: z.string().optional(),
+          server_id: z.string().optional(),
+          toolName: z.string().optional(),
+          tool_name: z.string().optional(),
+          input: z.record(z.string(), z.unknown()).optional().default({}),
+        }), toolCtx),
+        hostTool("skill_list", "按需列出可用技能摘要。只有当任务需要特定工作流或领域能力时才调用。", z.object({}), toolCtx),
+        hostTool("skill_read", "读取 skill_list 返回的某个 SKILL.md。只有确认需要该技能时才读取，避免普通问答加载大量技能文档。", z.object({
+          path: z.string().optional(),
+          id: z.string().optional(),
+          name: z.string().optional(),
+        }), toolCtx),
       ] as any,
-      backend: createHostBackend(toolCtx, files) as any,
-      skills: Object.keys(files).length ? ["/skills/"] : undefined,
+      backend: createHostBackend(toolCtx) as any,
       systemPrompt: `你是 Any Jumper Desktop 的官方 DeepAgents Runtime。你运行在 Electron 主进程内部，所有文件、shell、git、MCP、业务操作都必须通过宿主工具桥。默认用中文回复。当前工作区：${ctx.workspace.rootPath}。当前权限：${ctx.permissionMode}。在开始关键阶段、读到重要线索、准备修改文件、开始验证或遇到阻塞时，调用 progress_note 写一句可公开展示给用户的中文进度；不要泄露隐藏推理链，只描述可公开的工作状态。最终回答只保留结论、关键证据和必要建议；不要在最终回答中输出执行过程、工具调用代码、原始日志、<details> 执行过程块或反复试错流水账。`,
       subagents: [
         {
@@ -1623,7 +1971,6 @@ class AgentRuntimeService {
     let turnTokenUsage: ReturnType<typeof extractFinalOutputParts>["usage"];
     const inputState = {
       messages: messages.length ? messages : [new HumanMessage({ content: ctx.input })],
-      files,
     };
     const stream = agent.streamEvents(inputState as any, { version: "v2", configurable: { thread_id: ctx.thread.id, checkpoint_ns: ctx.turn.id }, signal: ctx.abortSignal } as any);
     for await (const event of stream as any) {
@@ -1657,10 +2004,10 @@ class AgentRuntimeService {
       if (event?.event === "on_tool_start" && event?.name === "write_todos") emitTodos(ctx, event?.data?.input);
       if (event?.event === "on_tool_end" && event?.name === "write_todos") emitTodos(ctx, event?.data?.output ?? event?.data?.input);
       if (event?.event === "on_tool_start" && event?.name === "task") {
-        emitAgentEvent({ event: "tool.delta", threadId: ctx.thread.id, turnId: ctx.turn.id, payload: { name: "task", status: "started", input: event?.data?.input } });
+        emitAgentEvent({ event: "tool.delta", threadId: ctx.thread.id, turnId: ctx.turn.id, toolCallId: stringValue(event?.run_id), payload: { name: "task", status: "started", input: event?.data?.input } });
       }
       if (event?.event === "on_tool_end" && event?.name === "task") {
-        emitAgentEvent({ event: "tool.delta", threadId: ctx.thread.id, turnId: ctx.turn.id, payload: { name: "task", status: "completed", output: stringify(event?.data?.output) } });
+        emitAgentEvent({ event: "tool.delta", threadId: ctx.thread.id, turnId: ctx.turn.id, toolCallId: stringValue(event?.run_id), payload: { name: "task", status: "completed", output: stringify(event?.data?.output) } });
       }
       const candidateParts = extractFinalOutputParts(event?.data?.output);
       if (candidateParts.usage) turnTokenUsage = candidateParts.usage;
@@ -1734,6 +2081,60 @@ type RuntimeContext = {
   runtime: AgentRuntimeConfig;
   abortSignal?: AbortSignal;
 };
+
+function safeUsageToken(value: unknown) {
+  const number = typeof value === "number" ? value : Number(value ?? 0);
+  if (!Number.isFinite(number) || number <= 0) return 0;
+  return Math.trunc(number);
+}
+
+function collectJsonlFiles(root: string): { files: string[]; error?: string } {
+  if (!existsSync(root)) return { files: [], error: "目录不存在" };
+  const files: string[] = [];
+  try {
+    const visit = (current: string) => {
+      for (const entry of readdirSync(current, { withFileTypes: true })) {
+        const fullPath = path.join(current, entry.name);
+        if (entry.isDirectory()) {
+          visit(fullPath);
+        } else if (entry.isFile() && entry.name.endsWith(".jsonl")) {
+          files.push(fullPath);
+        }
+      }
+    };
+    visit(root);
+    return { files };
+  } catch (error) {
+    return { files, error: errorMessageForSync(error) };
+  }
+}
+
+function safeStat(filePath: string) {
+  try {
+    const info = statSync(filePath);
+    return { mtime: Math.trunc(info.mtimeMs), size: info.size };
+  } catch {
+    return { mtime: 0, size: 0 };
+  }
+}
+
+function errorMessageForSync(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+function externalUsageEventId(event: ExternalUsageEvent) {
+  return createHash("sha1")
+    .update(`${event.source}\n${event.filePath}\n${event.eventKey}`)
+    .digest("hex");
+}
+
+function workspaceMatchesUsageEvent(event: NormalizedUsageEvent, workspaceId: string, workspace?: Workspace) {
+  if (event.workspaceId === workspaceId) return true;
+  if (!workspace?.rootPath || !event.workspacePath) return false;
+  const relative = path.relative(path.resolve(workspace.rootPath), path.resolve(event.workspacePath));
+  return relative === "" || (Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative));
+}
 
 function mapWorkspace(row: any): Workspace {
   const item = camelRow<Workspace>(row);
@@ -1816,7 +2217,7 @@ function mapApproval(row: any): Approval {
 
 function mapMcp(row: any): McpServerConfig {
   const item = camelRow<McpServerConfig>(row);
-  return { ...item, enabled: toBool((row as any).enabled), commandJson: item.commandJson ?? undefined, url: item.url ?? undefined, envJson: item.envJson ?? undefined };
+  return { ...item, enabled: toBool((row as any).enabled), commandJson: item.commandJson ?? undefined, url: item.url ?? undefined, envJson: item.envJson ?? undefined, headersJson: item.headersJson ?? undefined, timeout: item.timeout ?? undefined };
 }
 
 function mapPlugin(row: any): PluginSummary {
@@ -2294,21 +2695,6 @@ function sliceText(value: string, offset = 0, limit = 500) {
   return value.split("\n").slice(Number(offset || 0), Number(offset || 0) + Math.min(Number(limit || 500), 2000)).join("\n");
 }
 
-async function mcpToolsForAgent(ctx: ToolContext) {
-  const tools = [];
-  for (const server of storage.listMcpServers().filter((item) => item.enabled)) {
-    for (const mcpTool of await mcpListTools(server).catch(() => [])) {
-      const name = `mcp_${safeToolName(server.name)}_${safeToolName(mcpTool.name)}`;
-      tools.push(tool(async (input: any) => appRuntime.toolService.invoke(ctx, "mcp_call", { serverId: server.id, toolName: mcpTool.name, input: input?.input ?? input ?? {} }), {
-        name,
-        description: mcpTool.description || `Call MCP tool ${mcpTool.name} on ${server.name}`,
-        schema: z.record(z.string(), z.unknown()).optional().default({}),
-      }));
-    }
-  }
-  return tools;
-}
-
 function skillList(workspaceId?: string): SkillSummary[] {
   const roots = userSkillRoots().map((root) => ({ scope: "user", root }));
   if (workspaceId) {
@@ -2327,6 +2713,29 @@ function skillList(workspaceId?: string): SkillSummary[] {
 function skillRead(filePath: string) {
   if (path.basename(filePath) !== "SKILL.md") throw new AppError("PERMISSION_DENIED", "只能读取 SKILL.md 文件");
   return readFileSync(filePath, "utf8");
+}
+
+function skillListForRuntime(workspaceId?: string) {
+  return skillList(workspaceId).map((skill) => ({
+    id: skill.id,
+    name: skill.name,
+    description: skill.description,
+    scope: skill.scope,
+    path: skill.path,
+  }));
+}
+
+function readSkillForRuntime(workspaceId: string | undefined, selector: unknown) {
+  const value = (stringValue(selector) ?? "").trim();
+  if (!value) throw new AppError("UNKNOWN_ERROR", "请提供要读取的技能 id、name 或 path");
+  const skill = skillList(workspaceId).find((item) =>
+    item.id === value ||
+    item.name === value ||
+    item.path === value ||
+    path.basename(path.dirname(item.path)) === value
+  );
+  if (!skill) throw new AppError("UNKNOWN_ERROR", `未找到可读取的技能：${value}`);
+  return truncateToolOutput(skillRead(skill.path), 32 * 1024);
 }
 
 function skillFiles(workspaceId: string) {
@@ -2863,6 +3272,55 @@ function mcpReload() {
   })));
 }
 
+async function mcpTest(serverId: string): Promise<{ ok: boolean; error?: string; tools?: number }> {
+  try {
+    const server = storage.getMcpServer(serverId);
+    const tools = await mcpListTools(server);
+    return { ok: true, tools: tools.length };
+  } catch (error) {
+    const normalized = normalizeError(error);
+    return { ok: false, error: normalized.message };
+  }
+}
+
+async function listMcpToolsForRuntime(selector?: unknown) {
+  const value = (stringValue(selector) ?? "").trim();
+  const servers = storage.listMcpServers().filter((server) => {
+    if (!server.enabled) return false;
+    return !value || server.id === value || server.name === value;
+  });
+  if (value && servers.length === 0) {
+    throw new AppError("UNKNOWN_ERROR", `未找到已启用的 MCP server：${value}`);
+  }
+  return Promise.all(servers.map(async (server) => {
+    try {
+      const tools = await mcpListTools(server);
+      return {
+        serverId: server.id,
+        serverName: server.name,
+        transport: server.transport,
+        tools: tools.map(runtimeMcpToolSummary),
+      };
+    } catch (error) {
+      return {
+        serverId: server.id,
+        serverName: server.name,
+        transport: server.transport,
+        error: normalizeError(error).message,
+        tools: [],
+      };
+    }
+  }));
+}
+
+function runtimeMcpToolSummary(mcpTool: AnyRecord) {
+  return {
+    name: stringValue(mcpTool.name),
+    description: compactRuntimeText(mcpTool.description, 600),
+    inputSchema: compactRuntimeValue(mcpTool.inputSchema ?? mcpTool.input_schema, 1200),
+  };
+}
+
 async function mcpListTools(server: McpServerConfig): Promise<Array<{ name: string; description?: string }>> {
   const result = await mcpJsonRpc(server, "tools/list", {});
   return result.tools ?? [];
@@ -2878,7 +3336,10 @@ async function mcpCall(serverId: string, toolName: string, input: AnyRecord, rep
 }
 
 function mcpJsonRpc(server: McpServerConfig, method: string, params: AnyRecord): Promise<any> {
-  if (server.transport !== "stdio") throw new AppError("UNKNOWN_ERROR", "HTTP MCP 将在后续版本启用");
+  if (server.transport === "http" || server.transport === "sse" || server.url) {
+    return mcpJsonRpcHttpSse(server, method, params);
+  }
+  // fallback: stdio
   const command = jsonParse<string[]>(server.commandJson, []);
   if (!command.length) throw new AppError("UNKNOWN_ERROR", "stdio MCP 缺少 command");
   return new Promise((resolve, reject) => {
@@ -2922,6 +3383,96 @@ function mcpJsonRpc(server: McpServerConfig, method: string, params: AnyRecord):
       reject(new AppError("UNKNOWN_ERROR", "MCP server 启动失败", error.message));
     });
     send({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "Any Jumper Desktop", version: "0.1.0" } } });
+  });
+}
+
+async function mcpJsonRpcHttpSse(server: McpServerConfig, method: string, params: AnyRecord): Promise<any> {
+  const url = server.url?.trim();
+  if (!url) throw new AppError("UNKNOWN_ERROR", "HTTP MCP 缺少 url");
+  const timeout = (server.timeout ?? 30) * 1000;
+  // Parse headers from headersJson
+  const headersRecord: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream",
+    ...jsonParse<Record<string, string>>(server.headersJson, {}),
+  };
+  const headers = new Headers(headersRecord);
+
+  // Step 1: POST /initialize to get SSE endpoint (streamable HTTP)
+  const initBody = { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "Any Jumper Desktop", version: "0.1.0" } } };
+  const initRes = await fetch(url, { method: "POST", headers, body: JSON.stringify(initBody), signal: AbortSignal.timeout(timeout) });
+  if (!initRes.ok) {
+    throw new AppError("UNKNOWN_ERROR", `HTTP MCP initialize 失败 (${initRes.status})`, await initRes.text().catch(() => ""));
+  }
+  const initData = await initRes.json().catch(() => ({}));
+  // Check if server supports streamable HTTP (returns result directly)
+  if (initData?.result) {
+    // Synchronous-style: server returned result directly, send notifications/initialized and then the actual call
+    // Send notifications/initialized (fire-and-forget POST)
+    void fetch(url, { method: "POST", headers, body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} }), signal: AbortSignal.timeout(5000) }).catch(() => {});
+    // Now send the actual method call
+    const body = { jsonrpc: "2.0", id: 2, method, params };
+    const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body), signal: AbortSignal.timeout(timeout) });
+    if (!res.ok) throw new AppError("UNKNOWN_ERROR", `HTTP MCP ${method} 失败 (${res.status})`, await res.text().catch(() => ""));
+    const data = await res.json().catch(() => ({}));
+    if (data?.error) throw new AppError("UNKNOWN_ERROR", "MCP tool 调用失败", JSON.stringify(data.error));
+    return data?.result ?? data;
+  }
+
+  // Step 2: SSE-based protocol — read sessionId from response headers or body
+  const sessionId = initRes.headers.get("mcp-session-id") ?? initData?.sessionId;
+  const sseUrl = initRes.headers.get("mcp-endpoint") ?? initData?.endpoint ?? url;
+
+  // Step 3: Send notifications/initialized
+  await fetch(sseUrl, { method: "POST", headers, body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} }), signal: AbortSignal.timeout(5000) }).catch(() => {});
+
+  // Step 4: POST the actual method call and read SSE stream for response
+  const callBody = JSON.stringify({ jsonrpc: "2.0", id: sessionId ? undefined : 2, method, params, ...(sessionId ? { sessionId } : {}) });
+  const sseHeaders = new Headers(headers);
+  sseHeaders.set("Accept", "text/event-stream");
+
+  const sseRes = await fetch(sseUrl, { method: "POST", headers: sseHeaders, body: callBody, signal: AbortSignal.timeout(timeout) });
+  if (!sseRes.ok) throw new AppError("UNKNOWN_ERROR", `HTTP MCP SSE ${method} 失败 (${sseRes.status})`, await sseRes.text().catch(() => ""));
+
+  // Step 5: Parse SSE stream for the response
+  return new Promise((resolve, reject) => {
+    const rawReader = sseRes.body?.getReader();
+    if (!rawReader) return reject(new AppError("UNKNOWN_ERROR", "HTTP MCP 响应无 body"));
+    let reader: ReadableStreamDefaultReader<Uint8Array> = rawReader;
+
+    let buffer = "";
+    function processChunk() {
+      const eventDelim = "\n\n";
+      const idx = buffer.indexOf(eventDelim);
+      if (idx < 0) return;
+      const eventBlock = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      const dataLine = eventBlock.split("\n").find((l: string) => l.startsWith("data: "));
+      if (!dataLine) return processChunk();
+      try {
+        const data = JSON.parse(dataLine.slice(6));
+        if (data?.error) {
+          reader.cancel().catch(() => {});
+          reject(new AppError("UNKNOWN_ERROR", "MCP tool 调用失败", JSON.stringify(data.error)));
+        } else if (data?.result !== undefined && data?.result !== null) {
+          reader.cancel().catch(() => {});
+          resolve(data.result ?? data);
+          return;
+        }
+        // Continue reading for more events
+      } catch { /* skip malformed event */ }
+      processChunk();
+    }
+    reader.read().then(function pump({ done, value }): Promise<void> | void {
+      if (done) {
+        // If stream ended without result, try parsing whole buffer
+        try { const final = JSON.parse(buffer); resolve(final.result ?? final); } catch { reject(new AppError("UNKNOWN_ERROR", "HTTP MCP SSE 流结束但未收到结果")); }
+        return;
+      }
+      buffer += new TextDecoder().decode(value);
+      processChunk();
+      return reader.read().then(pump);
+    }).catch(reject);
   });
 }
 
@@ -3001,6 +3552,23 @@ function stringify(value: unknown) {
   } catch {
     return String(value);
   }
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function compactRuntimeText(value: unknown, limit: number) {
+  const text = stringValue(value);
+  if (!text) return undefined;
+  return text.length > limit ? `${text.slice(0, limit)}...` : text;
+}
+
+function compactRuntimeValue(value: unknown, limit: number) {
+  if (value === undefined || value === null) return undefined;
+  const text = JSON.stringify(value);
+  if (!text || text.length <= limit) return value;
+  return `${text.slice(0, limit)}...`;
 }
 
 function approvalSummary(name: string, input: AnyRecord) {
@@ -3135,10 +3703,11 @@ function registerIpcHandlers() {
           return "DeepAgents Runtime OK（Electron 内嵌官方 createDeepAgent）";
         }
         case "thread_create": return storage.createThread(args.request);
-        case "thread_list": return storage.listThreads(args.workspaceId);
+        case "thread_list": return storage.listThreads(args.workspaceId, args.archiveFilter);
         case "thread_read": return storage.readThread(args.threadId);
         case "thread_fork": return storage.forkThread(args.threadId, args.itemId);
         case "thread_archive": return storage.archiveThread(args.threadId);
+        case "thread_unarchive": return storage.unarchiveThread(args.threadId);
         case "thread_name_set": return storage.setThreadName(args.threadId, args.title);
         case "turn_start": return appRuntime.startTurn(args.request);
         case "turn_enqueue": return appRuntime.enqueueTurn(args.request);
@@ -3150,6 +3719,8 @@ function registerIpcHandlers() {
         case "tool_call_cancel": return storage.completeToolCall(args.toolCallId, "cancelled", "用户取消");
         case "mcp_list": return storage.listMcpServers();
         case "mcp_save": return storage.saveMcpServer(args.request);
+        case "mcp_delete": return storage.deleteMcpServer(args.id);
+        case "mcp_test": return mcpTest(args.id);
         case "mcp_reload": return mcpReload();
         case "mcp_call": return mcpCall(args.request.serverId, args.request.toolName, args.request.input);
         case "skill_list": return skillList(args.workspaceId);
@@ -3182,6 +3753,8 @@ function registerIpcHandlers() {
         case "portal_window_hide": return hidePortalWindow();
         case "portal_window_set_always_on_top": return setPortalWindowAlwaysOnTop(Boolean(args.pinned));
         case "portal_open_chat": return createWindow(args.workspaceId, args.threadId);
+        case "usage_dashboard": return storage.usageDashboard(args.request);
+        case "usage_sync_external": return storage.syncExternalUsage();
         case "open_external_url": return shell.openExternal(args.url);
         case "agent_bridge_status": return agentBridge.status();
         case "agent_bridge_restart": return agentBridge.restart();

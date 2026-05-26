@@ -136,10 +136,13 @@ describe("AgentPage transcript message layout", () => {
     expect(css).toContain(".turn-trace-summary");
     expect(css).toContain(".turn-trace-card");
     expect(css).toContain("max-height: min(360px, 55vh)");
-    expect(css).toContain(".turn-trace-section-title");
     expect(css).toContain(".turn-trace-stream");
-    expect(css).toContain(".turn-trace-thought");
-    expect(css).toContain(".turn-trace-tool-row");
+    expect(css).toContain(".turn-trace-meta-row");
+    expect(css).toContain(".turn-trace-thought-text");
+    expect(css).toContain(".turn-trace-tool-details");
+    expect(source).not.toContain("turn-trace-current");
+    expect(css).not.toContain(".turn-trace-current");
+    expect(source).not.toContain("<span>时间线</span>");
     expect(css).not.toContain(".turn-trace-tokens");
     expect(source).not.toContain("Current model step");
     expect(source).not.toContain("Process note");
@@ -159,6 +162,20 @@ describe("AgentPage transcript message layout", () => {
     expect(tokenBlock).toContain("flex-shrink: 0;");
     expect(tokenBlock).toContain("white-space: nowrap;");
     expect(tokenBlock).not.toContain("max-width:");
+  });
+
+  it("shows a live processing duration with a breathing trace header while a turn runs", () => {
+    const source = readProjectFile("src/pages/AgentPage.tsx");
+    const css = readProjectFile("src/styles/theme.css");
+
+    expect(source).toContain('import { turnTraceHeadline } from "../utils/turnTraceDisplay"');
+    expect(source).toContain("const [traceNow, setTraceNow] = useState(() => Date.now())");
+    expect(source).toContain("setInterval(() => setTraceNow(Date.now()), 1000)");
+    expect(source).toContain("turnTraceHeadline(section, traceNow)");
+    expect(source).toContain('section.status === "running" ? "is-live" : ""');
+    expect(css).toContain("@keyframes turn-trace-breathe");
+    expect(css).toContain(".turn-trace-heading.is-live");
+    expect(css).toContain("animation: turn-trace-breathe");
   });
 
   it("restores token usage from persisted turns when reopening a thread", () => {
@@ -306,9 +323,6 @@ describe("AgentPage transcript message layout", () => {
     const footPathBlock = css.match(/(?:^|\n)\.agent-sidebar-foot-path\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const footCopyBlock = css.match(/(?:^|\n)\.agent-sidebar-foot-copy\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const themeButtonBlock = css.match(/(?:^|\n)\.agent-sidebar-theme-toggle\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
-    const miniRailBlock = css.match(/(?:^|\n)\.agent-workbench\.is-sidebar-collapsed \.agent-mini-rail\s*\{(?<body>[^}]*)\}/)
-      ?.groups?.body ?? "";
-    const miniSpacerBlock = css.match(/(?:^|\n)\.agent-mini-rail-spacer\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const cornerButtonBlock = css.match(/(?:^|\n)\.agent-corner-theme-toggle\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const compactMedia = css.match(/@media\s*\(max-width:\s*1180px\)\s*\{(?<body>[\s\S]*?)@media\s*\(max-width:\s*760px\)/)
       ?.groups?.body ?? "";
@@ -318,7 +332,7 @@ describe("AgentPage transcript message layout", () => {
     expect(source).toContain("agent-sidebar-foot-label");
     expect(source).toContain("agent-sidebar-foot-path");
     expect(source).toContain("agent-sidebar-theme-toggle");
-    expect(source).toContain("agent-mini-rail-theme-toggle");
+    expect(source).not.toContain("agent-mini-rail-theme-toggle");
     expect(source).toContain("agent-corner-theme-toggle");
     expect(source).toContain('aria-pressed={themeMode === "dark"}');
     expect(source.indexOf("agent-sidebar-theme-toggle")).toBeLessThan(source.indexOf("agent-sidebar-foot-copy"));
@@ -340,8 +354,8 @@ describe("AgentPage transcript message layout", () => {
     expect(themeButtonBlock).toContain("justify-content: center;");
     expect(themeButtonBlock).toContain("padding: 0;");
     expect(themeButtonBlock).toContain("background: transparent;");
-    expect(miniRailBlock).toContain("flex: 1 1 auto;");
-    expect(miniSpacerBlock).toContain("margin-top: auto;");
+    expect(source).not.toContain("agent-mini-rail");
+    expect(css).not.toContain(".agent-mini-rail");
     expect(cornerButtonBlock).toContain("display: none;");
     expect(css).toContain("@media (max-width: 1180px)");
     expect(compactCornerButtonBlock).toContain("display: none;");
@@ -363,7 +377,7 @@ describe("AgentPage transcript message layout", () => {
     expect(composerLeftBlock).toContain("flex-wrap: wrap;");
   });
 
-  it("keeps a mini sidebar rail instead of hiding navigation on compact windows", () => {
+  it("fully collapses the sidebar on compact windows while preserving the traffic-light safe area", () => {
     const css = readProjectFile("src/styles/theme.css");
     const compactMedia = css.match(/@media\s*\(max-width:\s*1180px\)\s*\{(?<body>[\s\S]*?)@media\s*\(max-width:\s*760px\)/)
       ?.groups?.body ?? "";
@@ -371,18 +385,20 @@ describe("AgentPage transcript message layout", () => {
     const collapsedWorkbenchBlock = compactMedia.match(/\.agent-workbench\.is-sidebar-collapsed\s*\{(?<body>[^}]*)\}/)
       ?.groups?.body ?? "";
     const sidebarBlock = compactMedia.match(/\.agent-sidebar\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const statusStripBlock = compactMedia.match(/\.agent-status-strip\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const miniRailBlock = compactMedia.match(/\.agent-mini-rail\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const sidebarContentBlock = compactMedia.match(/\.agent-sidebar > \*:not\(\.agent-mini-rail\)\s*\{(?<body>[^}]*)\}/)
       ?.groups?.body ?? "";
     const resizeHandleBlock = compactMedia.match(/\.resize-handle-h\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
 
-    expect(sidebarBlock).toContain("display: flex;");
-    expect(miniRailBlock).toContain("display: flex;");
-    expect(sidebarContentBlock).toContain("display: none;");
+    expect(sidebarBlock).toContain("display: none;");
+    expect(miniRailBlock).toBe("");
+    expect(sidebarContentBlock).toBe("");
     expect(resizeHandleBlock).toContain("display: none;");
     expect(css).toContain("--window-control-safe-width: 72px;");
-    expect(workbenchBlock).toContain("grid-template-columns: var(--window-control-safe-width) minmax(0, 1fr);");
-    expect(collapsedWorkbenchBlock).toContain("grid-template-columns: var(--window-control-safe-width) minmax(0, 1fr);");
+    expect(workbenchBlock).toContain("grid-template-columns: minmax(0, 1fr);");
+    expect(collapsedWorkbenchBlock).toContain("grid-template-columns: minmax(0, 1fr);");
+    expect(statusStripBlock).toContain("padding-left: calc(var(--window-control-safe-width) + 16px);");
     expect(workbenchBlock).not.toContain("var(--agent-sidebar-width)");
   });
 
@@ -391,11 +407,19 @@ describe("AgentPage transcript message layout", () => {
     const css = readProjectFile("src/styles/theme.css");
     const collapsedWorkbenchBlock = css.match(/(?:^|\n)\.agent-workbench\.is-sidebar-collapsed\s*\{(?<body>[^}]*)\}/)
       ?.groups?.body ?? "";
+    const collapsedContentRowBlock = css.match(/(?:^|\n)\.agent-workbench\.is-sidebar-collapsed \.agent-content-row\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+    const collapsedStatusStripBlock = css.match(/(?:^|\n)\.agent-workbench\.is-sidebar-collapsed \.agent-status-strip\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
 
     expect(source).toContain("{!sidebarCollapsed && (\n          <ResizeHandle onResize={handleSidebarResize} />\n        )}");
     expect(collapsedWorkbenchBlock).toContain(
-      "grid-template-columns: max(60px, var(--window-control-safe-width)) minmax(0, 1fr);",
+      "grid-template-columns: minmax(0, 1fr);",
     );
+    expect(collapsedContentRowBlock).toContain("grid-column: 1;");
+    expect(collapsedStatusStripBlock).toContain("padding-left: calc(var(--window-control-safe-width) + 16px);");
+    expect(collapsedWorkbenchBlock).not.toContain("max(60px, var(--window-control-safe-width))");
+    expect(collapsedWorkbenchBlock).not.toContain("var(--window-control-safe-width) minmax(0, 1fr)");
     expect(collapsedWorkbenchBlock).not.toContain("60px auto minmax(560px, 1fr)");
   });
 
@@ -405,6 +429,8 @@ describe("AgentPage transcript message layout", () => {
       ?.groups?.body ?? "";
     const contentRowWithPanelBlock = compactMedia.match(/\.agent-content-row\.has-right-panel\s*\{(?<body>[^}]*)\}/)
       ?.groups?.body ?? "";
+    const contentRowWithHostResizeBlock = compactMedia.match(/\.agent-content-row\.has-right-panel\.is-right-panel-layout-frozen\.is-host-window-resizing\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
     const rightPanelBlock = compactMedia.match(/\.agent-right-panel\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
     const rightResizeBlock = compactMedia.match(/\.agent-right-resize\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
 
@@ -412,6 +438,8 @@ describe("AgentPage transcript message layout", () => {
     expect(rightResizeBlock).toContain("display: none;");
     expect(contentRowWithPanelBlock).toContain("grid-template-columns: minmax(0, 1fr);");
     expect(contentRowWithPanelBlock).not.toContain("var(--agent-right-panel-width)");
+    expect(contentRowWithHostResizeBlock).toContain("grid-template-columns: minmax(0, 1fr);");
+    expect(contentRowWithHostResizeBlock).toContain("width: 100%;");
   });
 
   it("keeps right panel resizing anchored to the right panel instead of the main track", () => {
@@ -423,6 +451,8 @@ describe("AgentPage transcript message layout", () => {
     const frozenRowBlock = css.match(/(?:^|\n)\.agent-content-row\.is-right-panel-layout-frozen\s*\{(?<body>[^}]*)\}/)
       ?.groups?.body ?? "";
     const frozenRowWithPanelBlock = css.match(/(?:^|\n)\.agent-content-row\.has-right-panel\.is-right-panel-layout-frozen\s*\{(?<body>[^}]*)\}/)
+      ?.groups?.body ?? "";
+    const hostFrozenRowWithPanelBlock = css.match(/(?:^|\n)\.agent-content-row\.has-right-panel\.is-right-panel-layout-frozen\.is-host-window-resizing\s*\{(?<body>[^}]*)\}/)
       ?.groups?.body ?? "";
     const mainBlock = css.match(/(?:^|\n)\.agent-content-row > \.agent-main\s*\{(?<body>[^}]*)\}/)
       ?.groups?.body ?? "";
@@ -437,14 +467,19 @@ describe("AgentPage transcript message layout", () => {
     expect(source).toContain("agentMainRef");
     expect(source).toContain("agentMainRef.current?.getBoundingClientRect().width");
     expect(source).toContain("is-right-panel-layout-frozen");
+    expect(source).toContain("rightPanelHostWindowResizing");
+    expect(source).toContain("is-host-window-resizing");
     expect(source).toContain("--agent-main-freeze-width");
     expect(contentRowBlock).toContain("display: grid;");
     expect(contentRowBlock).toContain("grid-template-columns: minmax(0, 1fr);");
     expect(contentRowWithPanelBlock).toContain("grid-template-columns: minmax(0, 1fr) 6px var(--agent-right-panel-width);");
     expect(frozenRowBlock).toContain("grid-template-columns: var(--agent-main-freeze-width);");
     expect(frozenRowBlock).toContain("width: var(--agent-main-freeze-width);");
-    expect(frozenRowWithPanelBlock).toContain("grid-template-columns: var(--agent-main-freeze-width) 6px var(--agent-right-panel-width);");
-    expect(frozenRowWithPanelBlock).toContain("width: calc(var(--agent-main-freeze-width) + 6px + var(--agent-right-panel-width));");
+    expect(frozenRowWithPanelBlock).toContain("--agent-main-visible-width: clamp(0px, calc(100% - 6px - var(--agent-right-panel-width)), var(--agent-main-freeze-width));");
+    expect(frozenRowWithPanelBlock).toContain("grid-template-columns: minmax(0, var(--agent-main-visible-width)) 6px var(--agent-right-panel-width);");
+    expect(frozenRowWithPanelBlock).toContain("width: min(100%, calc(var(--agent-main-freeze-width) + 6px + var(--agent-right-panel-width)));");
+    expect(hostFrozenRowWithPanelBlock).toContain("grid-template-columns: var(--agent-main-freeze-width) 6px var(--agent-right-panel-width);");
+    expect(hostFrozenRowWithPanelBlock).toContain("width: calc(var(--agent-main-freeze-width) + 6px + var(--agent-right-panel-width));");
     expect(mainBlock).toContain("min-width: 0;");
     expect(resizeBlock).not.toContain("position: absolute;");
     expect(resizeBlock).toContain("width: 6px;");
@@ -506,8 +541,15 @@ describe("AgentPage transcript message layout", () => {
     expect(source).toContain("const RIGHT_PANEL_RESIZER_WIDTH = 6;");
     expect(source).toContain("const handleRightPanelToggle = useCallback(() => {");
     expect(source).toContain("const panelResizeDelta = rightPanelWidth + RIGHT_PANEL_RESIZER_WIDTH;");
+    expect(source).toContain("const canResizeHostWindow = Boolean(window.anyJumper?.invoke);");
+    expect(source).toContain("rightPanelToggleTransactionRef");
+    expect(source).toContain("setRightPanelHostWindowResizing(true);");
     expect(source).toContain("desktopApi.resizeCurrentWindowByWidthDelta(next ? panelResizeDelta : -panelResizeDelta);");
+    expect(source).toContain("if (next) {");
+    expect(source).toContain("setRightPanelOpen(false);");
+    expect(source).toContain("finishRightPanelToggleAfterPaint(transactionId);");
     expect(source).toContain("rightPanelWindowResizeSuppressedRef");
+    expect(source).not.toContain("}, 240);");
     expect(source).toContain("onClick={handleRightPanelToggle}");
     expect(desktopApiSource).toContain("resizeCurrentWindowByWidthDelta(delta: number)");
     expect(desktopApiSource).toContain('invoke<void>("window_resize_by_width_delta", { delta })');
@@ -528,27 +570,51 @@ describe("AgentPage transcript message layout", () => {
     expect(css).toContain(".turn-trace-approval-actions");
   });
 
-  it("folds realtime tool trace into compact inline timeline rows", () => {
+  it("surfaces pending approvals in a global dialog", () => {
+    const source = readProjectFile("src/pages/AgentPage.tsx");
+    const css = readProjectFile("src/styles/theme.css");
+
+    expect(source).toContain("const activeApproval = pendingApprovals[0];");
+    expect(source).toMatch(/<Dialog\s+open=\{Boolean\(activeApproval\)\}/);
+    expect(source).toContain("<DialogTitle>待审批工具调用</DialogTitle>");
+    expect(source).toContain("activeApproval ? (");
+    expect(source).toContain("resolveApproval(activeApproval, \"approved\")");
+    expect(source).toContain("resolveApproval(activeApproval, \"rejected\")");
+    expect(css).toContain(".approval-dialog-body");
+    expect(css).toContain(".approval-dialog-summary");
+  });
+
+  it("folds realtime tool trace into a compact Codex-style detail summary", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
     const cardSource = readProjectFile("src/components/ToolTraceCard.tsx");
     const css = readProjectFile("src/styles/theme.css");
 
-    expect(source).toContain("composeTurnTraceRows");
-    expect(source).toContain("toolTraceCardToTimelineRow");
+    expect(source).toContain("composeTurnTraceDetailRows");
+    expect(source).toContain("toolTraceCardToDetailRow");
+    expect(source).toContain("compactTurnTraceToolSummary");
     expect(source).toContain("toolCards={toolCards}");
     expect(source).toContain("toolCards?: ToolTraceCardModel[]");
     expect(source).toContain("compactModelProcessItems");
-    expect(source).toContain("timelineRows.map");
+    expect(source).toContain("composeTurnTraceStreamEntries(compactItems.items, toolDetailRows)");
+    expect(source).toContain("traceEntries.map((entry)");
+    expect(source).toContain('entry.type === "thought"');
+    expect(source).toContain("<TurnTraceToolGroup");
     expect(source).toContain('row.type === "tool"');
-    expect(source).toContain('row.status !== "completed" ? <span className="turn-trace-row-status">');
+    expect(source).toContain('row.status !== "completed" ? <small>{toolTraceStatusLabel(row.status)}</small> : null');
+    expect(source).toContain('<details className="turn-trace-tool-details">');
+    expect(source).toContain('<summary className="turn-trace-tool-summary">');
+    expect(source).toContain('<TurnTraceMetaRow status={entry.status} summary={entry.summary} />');
+    expect(source).not.toContain("查看工具详情");
     expect(source).not.toContain("<ToolTraceGroup");
     expect(source).toContain("toolCallEventsByTurn");
     expect(source).toContain("reduceToolTraceByTurn");
     expect(cardSource).toContain("tool-trace-card");
     expect(cardSource).toContain("tool-trace-output");
-    expect(css).toContain(".turn-trace-row-action");
+    expect(css).toContain(".turn-trace-tool-details");
+    expect(css).toContain(".turn-trace-tool-detail-head");
     expect(css).toContain(".turn-trace-row-detail");
     expect(css).toContain(".turn-trace-tool-output");
+    expect(css).not.toContain(".turn-trace-row-action");
     expect(css).not.toContain(".turn-trace-tools .tool-trace-group");
   });
 
@@ -580,25 +646,31 @@ describe("AgentPage transcript message layout", () => {
     expect(conversationSource).toContain("StickToBottom");
   });
 
-  it("keeps expanded trace as an ordered timeline with folded tools and approvals", () => {
+  it("renders expanded trace as a Codex-style process stream with folded tool details", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
     const css = readProjectFile("src/styles/theme.css");
 
     expect(source).toContain("TRACE_THOUGHT_VISIBLE_LIMIT");
     expect(source).toContain("compactModelProcessItems(processItems, TRACE_THOUGHT_VISIBLE_LIMIT)");
-    expect(source).toContain("timelineRows = composeTurnTraceRows(compactItems.items, toolCards, approvals)");
-    expect(source).toContain("expandedTimelineRows");
-    expect(source).toContain("timelineRows.map((row)");
-    expect(source).toContain('row.type === "thought"');
-    expect(source).toContain('row.type === "tool"');
-    expect(source).toContain('row.type === "approval"');
-    expect(source).toContain('aria-expanded={Boolean(expandedTimelineRows[row.id])}');
-    expect(source).toContain("approvalToTimelineRow");
+    expect(source).toContain("toolDetailRows = composeTurnTraceDetailRows(toolCards, approvals)");
+    expect(source).toContain("traceEntries = composeTurnTraceStreamEntries(compactItems.items, toolDetailRows)");
+    expect(source).toContain("traceEntries.map((entry)");
+    expect(source).toContain("<TurnTraceThought item={item}");
+    expect(source).toContain("<TurnTraceToolGroup");
+    expect(source).toContain("<TurnTraceMetaRow");
+    expect(source).toContain("<details className=\"turn-trace-tool-details\">");
+    expect(source).toContain("<summary className=\"turn-trace-tool-summary\">");
+    expect(source).not.toContain("查看工具详情");
+    expect(source).not.toContain("compactItems.items.map((item)");
+    expect(source).not.toContain("expandedTimelineRows");
+    expect(source).not.toContain("timelineRows.map((row)");
+    expect(source).not.toContain("modelProcessItemLabel");
     expect(source).not.toContain("toolSectionExpanded");
     expect(source).not.toContain("approvalSectionExpanded");
-    expect(css).toContain(".turn-trace-row-action");
-    expect(css).toContain(".turn-trace-row-detail");
-    expect(css).toContain(".turn-trace-row-chevron");
+    expect(css).toContain(".turn-trace-meta-row");
+    expect(css).toContain(".turn-trace-thought-text");
+    expect(css).toContain(".turn-trace-tool-details");
+    expect(css).not.toContain(".turn-trace-row-action");
   });
 
   it("formats reasoning trace text as readable paragraphs with truncation feedback", () => {
@@ -607,7 +679,7 @@ describe("AgentPage transcript message layout", () => {
 
     expect(source).toContain("formatTraceThoughtText");
     expect(source).toContain("TraceThoughtText");
-    expect(source).toContain('row.kind === "reasoning"');
+    expect(source).toContain('item.kind === "reasoning"');
     expect(source).toContain("turn-trace-reasoning");
     expect(css).toContain(".turn-trace-reasoning");
     expect(css).toContain(".turn-trace-reasoning-paragraph");

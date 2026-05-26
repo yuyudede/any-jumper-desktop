@@ -4,7 +4,7 @@ const PROGRESS_CHATTER_PATTERNS = [
   /^现在(?:我)?(?:已经)?(?:有足够|开始|继续|读取|查看|分析|检查|更新|写|整理)\b/u,
   /^Now let me\b/i,
   /^Now I (?:have|will|can|need|should)\b/i,
-  /^Let me (?:also |now )?(?:read|check|inspect|analyze|analyse|create|update|write|look|review|explore|search|complete)\b/i,
+  /^Let me (?:also |now )?(?:read|check|inspect|analyze|analyse|create|update|write|look|review|explore|search|complete|compile)\b/i,
   /^I (?:now )?(?:have enough information|will|need to|should|can now)\b/i,
   /^First,? (?:I(?:'ll| will)|let me)\b/i,
   /^Step\s*\d+[:：][\s\S]*(?:读取|查看|检查|定位|分析|搜索|探索|确认|开始|准备|现在我|让我|let me|now)/iu,
@@ -12,7 +12,7 @@ const PROGRESS_CHATTER_PATTERNS = [
 ];
 
 const ENGLISH_PROGRESS_STARTER =
-  /Now let me\b|Now I (?:have|will|can|need|should)\b|Let me (?:also |now )?(?:read|check|inspect|analyze|analyse|create|update|write|look|review|explore|search|complete)\b|I (?:now )?(?:have enough information|will|need to|should|can now)\b|First,? (?:I(?:'ll| will)|let me)\b/gi;
+  /Now let me\b|Now I (?:have|will|can|need|should)\b|Let me (?:also |now )?(?:read|check|inspect|analyze|analyse|create|update|write|look|review|explore|search|complete|compile)\b|I (?:now )?(?:have enough information|will|need to|should|can now)\b|First,? (?:I(?:'ll| will)|let me)\b/gi;
 
 const MARKDOWN_SEPARATOR = /-{3,}|\*{3,}|_{3,}/u;
 const ANSWER_START_MARKERS = ["项目分析报告", "分析报告：", "综合分析报告", "# "];
@@ -202,7 +202,10 @@ function normalizeProgressChatterLine(line: string) {
 function trimAssistantContent(content: string, removedProgress: boolean) {
   let next = content.trim();
   if (removedProgress) {
-    next = next.replace(/^(?:-{3,}|\*{3,}|_{3,})\s*\n+/u, "").trim();
+    next = next
+      .replace(/^(?:-{3,}|\*{3,}|_{3,})[ \t]*(?=(?:#{1,6}\s|项目分析报告|分析报告：|综合分析报告))/u, "")
+      .replace(/^(?:-{3,}|\*{3,}|_{3,})\s*\n+/u, "")
+      .trim();
   }
   return next;
 }

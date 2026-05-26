@@ -2,6 +2,17 @@ import type { ReactNode } from "react";
 
 export type ActivityStatus = "idle" | "running" | "success" | "error";
 
+export type SubagentTaskStatus = "running" | "completed" | "failed";
+
+export interface SubagentTask {
+  id: string;
+  title: string;
+  status: SubagentTaskStatus;
+  summary?: string;
+  createdAt: number;
+  completedAt?: number;
+}
+
 export interface ActivityItem {
   id: string;
   title: string;
@@ -187,6 +198,121 @@ export interface AgentTurn {
   tokenUsage?: TurnTokenUsage;
 }
 
+export type UsageSource = "any_jumper" | "claude_code" | "codex_cli";
+
+export interface NormalizedUsageEvent {
+  id: string;
+  source: UsageSource;
+  providerKind?: string;
+  providerId?: string;
+  providerLabel?: string;
+  model: string;
+  modelLabel?: string;
+  sessionId?: string;
+  sessionTitle?: string;
+  workspaceId?: string;
+  workspaceName?: string;
+  workspacePath?: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  totalTokens: number;
+  occurredAt: number;
+  rawJson?: unknown;
+}
+
+export interface UsageNormalizedTotals {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  totalTokens: number;
+  freshInputTokens: number;
+  realTotalTokens: number;
+  cacheHitRate: number;
+}
+
+export interface UsageSummary extends UsageNormalizedTotals {
+  eventCount: number;
+  sessionCount: number;
+  modelCount: number;
+}
+
+export interface UsageModelSummary extends UsageNormalizedTotals {
+  source: UsageSource;
+  providerKind?: string;
+  providerId?: string;
+  providerLabel?: string;
+  model: string;
+  modelLabel?: string;
+  workspaceId?: string;
+  workspaceName?: string;
+  workspacePath?: string;
+  sessionCount: number;
+  eventCount: number;
+}
+
+export interface UsageSessionModelSummary extends UsageNormalizedTotals {
+  source: UsageSource;
+  providerKind?: string;
+  providerId?: string;
+  providerLabel?: string;
+  model: string;
+  modelLabel?: string;
+  eventCount: number;
+}
+
+export interface UsageSessionSummary extends UsageNormalizedTotals {
+  source: UsageSource;
+  sessionId?: string;
+  sessionTitle?: string;
+  workspaceId?: string;
+  workspaceName?: string;
+  workspacePath?: string;
+  providerKind?: string;
+  providerId?: string;
+  providerLabel?: string;
+  primaryModel: string;
+  modelCount: number;
+  modelBreakdown: UsageSessionModelSummary[];
+  eventCount: number;
+  lastOccurredAt?: number;
+}
+
+export interface UsageSyncState {
+  source: UsageSource;
+  filePath: string;
+  fileMtime: number;
+  fileSize: number;
+  lastSyncedAt: number;
+  errorMessage?: string;
+}
+
+export interface UsageDashboardRequest {
+  source?: UsageSource | "all";
+  workspaceId?: string;
+  model?: string;
+  from?: number;
+  to?: number;
+  query?: string;
+}
+
+export interface UsageDashboardData {
+  summary: UsageSummary;
+  modelBreakdown: UsageModelSummary[];
+  sessionBreakdown: UsageSessionSummary[];
+  events: NormalizedUsageEvent[];
+  syncState: UsageSyncState[];
+}
+
+export interface UsageSyncResult {
+  importedCount: number;
+  syncState: UsageSyncState[];
+}
+
+export type ThreadArchiveFilter = "active" | "archived" | "all";
+
 export interface ImageAttachment {
   mimeType: string;
   data: string;
@@ -358,6 +484,8 @@ export interface McpServerConfig {
   commandJson?: string;
   url?: string;
   envJson?: string;
+  headersJson?: string;
+  timeout?: number;
   enabled: boolean;
   status: string;
   createdAt: number;
@@ -371,6 +499,8 @@ export interface McpServerRequest {
   commandJson?: string;
   url?: string;
   envJson?: string;
+  headersJson?: string;
+  timeout?: number;
   enabled: boolean;
 }
 

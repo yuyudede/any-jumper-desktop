@@ -28,4 +28,15 @@ describe("desktopApi error helpers", () => {
     expect(source).toContain("gitGenerateCommitMessage(rootPath: string)");
     expect(source).toContain('invoke<string>("git_generate_commit_message", { rootPath })');
   });
+
+  it("does not expose renderer APIs for removed Codex model sync", () => {
+    const source = readDesktopApiSource();
+
+    expect(source).not.toContain("CodexModelSyncRequest");
+    expect(source).not.toContain("CodexModelSyncResult");
+    expect(source).not.toContain("codexModelSyncSave");
+    expect(source).not.toContain("codexModelSyncValidate");
+    expect(source).not.toContain("codex_model_sync_save");
+    expect(source).not.toContain("codex_model_sync_validate");
+  });
 });

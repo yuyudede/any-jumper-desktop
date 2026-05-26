@@ -14,6 +14,7 @@ interface RichComposerProps {
   content: string;
   onContentChange: (content: string) => void;
   onKeyDown?: (event: KeyboardEvent) => void;
+  onPaste?: (event: ClipboardEvent) => void;
   onEnter?: () => void;
   placeholder?: string;
   disabled?: boolean;
@@ -27,6 +28,7 @@ const RichComposer = memo(
         content,
         onContentChange,
         onKeyDown,
+        onPaste,
         onEnter,
         placeholder = "输入下一步要求...",
         disabled = false,
@@ -72,6 +74,12 @@ const RichComposer = memo(
               event.preventDefault();
               if (onEnter) onEnter();
               return true;
+            }
+            return false;
+          },
+          handlePaste: (_, event) => {
+            if (onPaste) {
+              onPaste(event);
             }
             return false;
           },

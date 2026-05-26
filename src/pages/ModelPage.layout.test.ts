@@ -46,4 +46,28 @@ describe("ModelPage settings layout", () => {
     expect(source).not.toContain('TabsTrigger value="market"');
     expect(source).not.toContain("desktopApi.pluginList");
   });
+
+  it("promotes provider list above the model setup sections", () => {
+    const source = readProjectFile("src/pages/ModelPage.tsx");
+    const providerListIndex = source.indexOf('title="Provider 列表"');
+    const sessionDefaultIndex = source.indexOf('title="新会话默认模型"');
+    const providerConfigIndex = source.indexOf('title="Provider 配置"');
+
+    expect(providerListIndex).toBeGreaterThan(-1);
+    expect(sessionDefaultIndex).toBeGreaterThan(-1);
+    expect(providerConfigIndex).toBeGreaterThan(-1);
+    expect(providerListIndex).toBeLessThan(sessionDefaultIndex);
+    expect(providerListIndex).toBeLessThan(providerConfigIndex);
+  });
+
+  it("keeps Codex model sync controls out of the model settings page", () => {
+    const source = readProjectFile("src/pages/ModelPage.tsx");
+
+    expect(source).not.toContain('title="同步到 Codex"');
+    expect(source).not.toContain("写入 Codex");
+    expect(source).not.toContain("验证写入");
+    expect(source).not.toContain("desktopApi.codexModelSyncSave");
+    expect(source).not.toContain("desktopApi.codexModelSyncValidate");
+    expect(source).not.toContain("codexSyncedModels");
+  });
 });

@@ -278,11 +278,14 @@ describe("App navigation shell", () => {
   });
 
   it("uses neutral glass for selected primary sidebar entries", () => {
+    const source = readProjectFile("src/pages/AgentPage.tsx");
     const css = readProjectFile("src/styles/theme.css");
-    const activeBlocks = Array.from(css.matchAll(/(?:^|\n)\.(?:agent-bridge-entry|agent-mini-rail-entry)\.is-active\s*\{(?<body>[^}]*)\}/g))
+    const activeBlocks = Array.from(css.matchAll(/(?:^|\n)\.agent-bridge-entry\.is-active\s*\{(?<body>[^}]*)\}/g))
       .map((match) => match.groups?.body ?? "");
 
     expect(activeBlocks.length).toBeGreaterThan(0);
+    expect(source).not.toContain("agent-mini-rail");
+    expect(css).not.toContain(".agent-mini-rail");
     for (const block of activeBlocks) {
       expect(block).toContain("background: var(--agent-sidebar-selected-bg);");
       expect(block).toContain("border-color: var(--agent-sidebar-selected-border);");

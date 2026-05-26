@@ -22,6 +22,8 @@ import {
   DEFAULT_PORTAL_SHORTCUT,
   resolvePortalDefaults,
 } from "../utils/portalDefaults";
+import PortalSessionManagement from "./portal/PortalSessionManagement";
+import PortalUsageManagement from "./portal/PortalUsageManagement";
 
 interface PortalPageProps {
   pushActivity: (
@@ -62,13 +64,21 @@ interface PortalMainAppSettingsProps {
   onSave: () => void;
 }
 
-type PortalSubTab = "quickAsk" | "mainApp";
+type PortalSubTab = "usage" | "sessions" | "quickAsk" | "mainApp";
 type ShortcutRecordingTarget = "quickAsk" | "mainApp";
 
 const portalSubTabs: Array<{
   id: PortalSubTab;
   label: string;
 }> = [
+  {
+    id: "usage",
+    label: "Usage",
+  },
+  {
+    id: "sessions",
+    label: "Sessions",
+  },
   {
     id: "quickAsk",
     label: "Quick Ask",
@@ -101,7 +111,7 @@ export default function PortalPage({ pushActivity }: PortalPageProps) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [recordingShortcutTarget, setRecordingShortcutTarget] = useState<ShortcutRecordingTarget>();
-  const [portalSubTab, setPortalSubTab] = useState<PortalSubTab>("quickAsk");
+  const [portalSubTab, setPortalSubTab] = useState<PortalSubTab>("usage");
   const [notice, setNotice] = useState<NoticeState>();
 
   const selectedProvider = useMemo(
@@ -246,7 +256,11 @@ export default function PortalPage({ pushActivity }: PortalPageProps) {
         ))}
       </div>
 
-      {portalSubTab === "quickAsk" ? (
+      {portalSubTab === "usage" ? (
+        <PortalUsageManagement workspaces={workspaces} pushActivity={pushActivity} />
+      ) : portalSubTab === "sessions" ? (
+        <PortalSessionManagement workspaces={workspaces} pushActivity={pushActivity} />
+      ) : portalSubTab === "quickAsk" ? (
         <PortalQuickAskSettings
           settingsDraft={settingsDraft}
           models={models}

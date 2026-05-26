@@ -2,6 +2,7 @@ import { useState, useMemo, memo, useCallback, useEffect, useRef } from "react";
 import { X, Columns2, Rows3, FileCode, FolderOpen } from "lucide-react";
 import { codeToTokens } from "shiki";
 import type { BundledLanguage, ThemedToken } from "shiki";
+import { currentShikiTheme } from "../utils/themeMode";
 
 export interface PreviewFile {
   path: string;
@@ -282,10 +283,9 @@ function FilePreview({ file }: { file: PreviewFile }) {
 
     async function run() {
       try {
-        const isDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
         const result = await codeToTokens(file.content, {
           lang: lang as BundledLanguage,
-          theme: isDark ? "github-dark" : "github-light",
+          theme: currentShikiTheme(),
         });
         if (!cancelled && !abortRef.current) {
           setTokens(result.tokens);

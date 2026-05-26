@@ -316,6 +316,50 @@ export default function ModelPage({ pushActivity }: ModelPageProps) {
         </div>
       ) : null}
 
+      <WorkbenchSection title="Provider 列表" description={`${models.length} 个 Provider，点击行可切换编辑。`}>
+        <div className="provider-table">
+          <div className="provider-table-head">
+            <span>名称</span>
+            <span>类型</span>
+            <span>默认模型</span>
+            <span>Base URL</span>
+            <span>操作</span>
+          </div>
+          {models.length === 0 ? (
+            <div className="mini-empty">暂无 Provider</div>
+          ) : (
+            models.map((provider) => (
+              <button
+                className={`provider-row ${provider.id === selectedProvider ? "is-active" : ""}`}
+                key={provider.id}
+                type="button"
+                onClick={() => selectProvider(provider)}
+              >
+                <span className="provider-name-cell">
+                  <strong>{provider.displayName}</strong>
+                  {providerConfigBadge(provider)}
+                </span>
+                <span>{provider.providerKind}</span>
+                <code>{provider.defaultModel}</code>
+                <code>{provider.baseUrl}</code>
+                <span className="provider-row-actions" onClick={(event) => event.stopPropagation()}>
+                  <Button
+                    aria-label={`删除 ${provider.displayName}`}
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    disabled={provider.id === "mock" || deletingProvider === provider.id}
+                    onClick={() => requestDeleteModelProvider(provider)}
+                  >
+                    <Trash2 size={15} />
+                  </Button>
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      </WorkbenchSection>
+
       <WorkbenchSection
         title="新会话默认模型"
         description="新建 Session 时优先使用这里选择的 Provider 和模型；未配置时跟随当前工作区默认值。"
@@ -450,50 +494,6 @@ export default function ModelPage({ pushActivity }: ModelPageProps) {
           </label>
         </div>
         <p className="form-hint">留空 API Key 不会覆盖已保存的 Key；Ollama 通常只需要 Base URL。</p>
-      </WorkbenchSection>
-
-      <WorkbenchSection title="Provider 列表" description={`${models.length} 个 Provider，点击行可切换编辑。`}>
-        <div className="provider-table">
-          <div className="provider-table-head">
-            <span>名称</span>
-            <span>类型</span>
-            <span>默认模型</span>
-            <span>Base URL</span>
-            <span>操作</span>
-          </div>
-          {models.length === 0 ? (
-            <div className="mini-empty">暂无 Provider</div>
-          ) : (
-            models.map((provider) => (
-              <button
-                className={`provider-row ${provider.id === selectedProvider ? "is-active" : ""}`}
-                key={provider.id}
-                type="button"
-                onClick={() => selectProvider(provider)}
-              >
-                <span className="provider-name-cell">
-                  <strong>{provider.displayName}</strong>
-                  {providerConfigBadge(provider)}
-                </span>
-                <span>{provider.providerKind}</span>
-                <code>{provider.defaultModel}</code>
-                <code>{provider.baseUrl}</code>
-                <span className="provider-row-actions" onClick={(event) => event.stopPropagation()}>
-                  <Button
-                    aria-label={`删除 ${provider.displayName}`}
-                    type="button"
-                    variant="destructive"
-                    size="icon"
-                    disabled={provider.id === "mock" || deletingProvider === provider.id}
-                    onClick={() => requestDeleteModelProvider(provider)}
-                  >
-                    <Trash2 size={15} />
-                  </Button>
-                </span>
-              </button>
-            ))
-          )}
-        </div>
       </WorkbenchSection>
 
       <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(undefined)}>

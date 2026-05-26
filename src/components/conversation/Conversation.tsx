@@ -18,7 +18,7 @@ export const Conversation = memo(function Conversation({
         .filter(Boolean)
         .join(" ")}
       initial="instant"
-      resize="smooth"
+      resize="instant"
       role="log"
     >
       <StickyUserMessage />

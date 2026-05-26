@@ -17,8 +17,12 @@ import type {
   ProjectContext,
   SkillSummary,
   ThreadCreateRequest,
+  ThreadArchiveFilter,
   ThreadDetail,
   TurnStartRequest,
+  UsageDashboardData,
+  UsageDashboardRequest,
+  UsageSyncResult,
   Workspace,
   WorkspaceRequest,
 } from "../types";
@@ -97,8 +101,8 @@ export const desktopApi = {
   threadCreate(request: ThreadCreateRequest) {
     return invoke<AgentThread>("thread_create", { request });
   },
-  threadList(workspaceId?: string) {
-    return invoke<AgentThread[]>("thread_list", { workspaceId });
+  threadList(workspaceId?: string, archiveFilter?: ThreadArchiveFilter) {
+    return invoke<AgentThread[]>("thread_list", { workspaceId, archiveFilter });
   },
   threadRead(threadId: string) {
     return invoke<ThreadDetail>("thread_read", { threadId });
@@ -108,6 +112,9 @@ export const desktopApi = {
   },
   threadArchive(threadId: string) {
     return invoke<void>("thread_archive", { threadId });
+  },
+  threadUnarchive(threadId: string) {
+    return invoke<void>("thread_unarchive", { threadId });
   },
   threadNameSet(threadId: string, title: string) {
     return invoke<AgentThread>("thread_name_set", { threadId, title });
@@ -141,6 +148,12 @@ export const desktopApi = {
   },
   mcpSave(request: McpServerRequest) {
     return invoke<McpServerConfig>("mcp_save", { request });
+  },
+  mcpDelete(id: string) {
+    return invoke<void>("mcp_delete", { id });
+  },
+  mcpTest(id: string) {
+    return invoke<{ ok: boolean; error?: string; tools?: number }>("mcp_test", { id });
   },
   mcpReload() {
     return invoke<unknown[]>("mcp_reload");
@@ -223,6 +236,12 @@ export const desktopApi = {
     return api.portalInvoke
       ? api.portalInvoke<void>("portal_open_chat", { workspaceId, threadId })
       : invoke<void>("portal_open_chat", { workspaceId, threadId });
+  },
+  usageDashboard(request: UsageDashboardRequest = {}) {
+    return invoke<UsageDashboardData>("usage_dashboard", { request });
+  },
+  usageSyncExternal() {
+    return invoke<UsageSyncResult>("usage_sync_external");
   },
   openExternalUrl(url: string) {
     return invoke<void>("open_external_url", { url });

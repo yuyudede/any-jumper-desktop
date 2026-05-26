@@ -36,7 +36,7 @@ export function classifyToolKind(name: string): ToolTraceKind {
   if (name.startsWith("git_")) return "git";
   if (["list_files", "read_file", "write_file", "edit_file", "glob"].includes(name)) return "file";
   if (["search", "grep"].includes(name)) return "search";
-  if (name === "mcp_call") return "mcp";
+  if (name === "mcp_call" || name === "mcp_list_tools") return "mcp";
   if (name === "task_update") return "task";
   return "other";
 }
@@ -65,6 +65,9 @@ export function createToolSummary(name: string, input: Record<string, unknown> =
     const tool = stringValue(input.toolName ?? input.tool_name) || "tool";
     return `${prefix}调用 MCP ${server}.${tool}`;
   }
+  if (name === "mcp_list_tools") return `${prefix}列出 MCP 工具`;
+  if (name === "skill_list") return `${prefix}列出技能`;
+  if (name === "skill_read") return `${prefix}读取技能 ${stringValue(input.path ?? input.id ?? input.name) || ""}`.trim();
   if (name.startsWith("git_")) return `${prefix}执行 ${name.replace("_", " ")}`;
   if (name === "task_update") return `${prefix}更新任务`;
   return `${prefix}调用 ${name}`;

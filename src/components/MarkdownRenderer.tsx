@@ -16,16 +16,14 @@ import type { BundledLanguage } from "shiki";
 import type { ThemedToken } from "shiki";
 import { Copy, Check } from "lucide-react";
 import { FilePathChip, detectFilePath } from "./message/FilePathChip";
+import { currentShikiTheme, isCurrentThemeDark } from "../utils/themeMode";
 
 /* ------------------------------------------------------------------ */
 /*  Mermaid init                                                       */
 /* ------------------------------------------------------------------ */
 
 function isDarkMode() {
-  return (
-    document.documentElement.dataset.theme === "dark" ||
-    window.matchMedia?.("(prefers-color-scheme: dark)").matches
-  );
+  return isCurrentThemeDark();
 }
 
 function buildMermaidConfig() {
@@ -236,11 +234,10 @@ function useShikiTokens(code: string, lang: string | undefined, streaming: boole
     }
 
     async function run() {
-      const isDark = isDarkMode();
       try {
         const result = await codeToTokens(code, {
           lang: (lang || "text") as BundledLanguage,
-          theme: isDark ? "github-dark" : "github-light",
+          theme: currentShikiTheme(),
         });
         if (!cancelled) {
           setTokens(result.tokens);

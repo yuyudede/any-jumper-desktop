@@ -53,6 +53,22 @@ Now I have enough information to write the comprehensive analysis report. Let me
     expect(result.notes).toEqual(["Now let me read the core files:"]);
   });
 
+  it("keeps markdown heading syntax when a leading separator is glued to the final report", () => {
+    const result = stripProgressChatter(`Now I have all the information needed to write the comprehensive analysis report. Let me compile it.
+
+--- # Any Jumper Desktop MCP 代码结构全面分析报告
+
+## 1. 所有相关文件的路径和关键代码片段`);
+
+    expect(result.content).toBe(`# Any Jumper Desktop MCP 代码结构全面分析报告
+
+## 1. 所有相关文件的路径和关键代码片段`);
+    expect(result.notes).toEqual([
+      "Now I have all the information needed to write the comprehensive analysis report.",
+      "Let me compile it.",
+    ]);
+  });
+
   it("removes markdown step-by-step work narration from the visible answer", () => {
     const result = stripProgressChatter("**Step 1：读取 AgentPage 核心渲染逻辑**...现在我来读取 IPC 事件处理和 MarkdownRenderer，以及主进程的事件推送到渲染进程的方式。\n\n最终结论：trace 应该只展示公开进度。");
 

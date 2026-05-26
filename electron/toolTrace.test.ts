@@ -16,6 +16,7 @@ describe("main tool trace helpers", () => {
     expect(classifyToolKind("read_file")).toBe("file");
     expect(classifyToolKind("search")).toBe("search");
     expect(classifyToolKind("mcp_call")).toBe("mcp");
+    expect(classifyToolKind("mcp_list_tools")).toBe("mcp");
   });
 
   it("redacts secret-looking input fields", () => {
@@ -31,6 +32,7 @@ describe("main tool trace helpers", () => {
   it("creates human summaries for common tools", () => {
     expect(createToolSummary("shell", { command: "pnpm test" }, "running")).toBe("正在运行 pnpm test");
     expect(createToolSummary("read_file", { path: "src/pages/AgentPage.tsx" }, "completed")).toBe("已读取 src/pages/AgentPage.tsx");
+    expect(createToolSummary("mcp_list_tools", {}, "running")).toBe("正在列出 MCP 工具");
     expect(createToolSummary("mcp_call", { serverId: "jira", toolName: "get_issue" }, "completed")).toBe("已调用 MCP jira.get_issue");
   });
 
@@ -88,5 +90,14 @@ describe("main tool trace helpers", () => {
     expect(source).toContain("最终回答只保留结论、关键证据和必要建议");
     expect(source).toContain("不要在最终回答中输出执行过程");
     expect(source).toContain("<details>");
+  });
+
+  it("emits stable tool call ids for subagent task delta events", () => {
+    const source = readFileSync(resolve(process.cwd(), "electron/main.ts"), "utf8");
+    const taskStartBlock = source.match(/event\?\.event === "on_tool_start" && event\?\.name === "task"[\s\S]*?}\);/)?.[0] ?? "";
+    const taskEndBlock = source.match(/event\?\.event === "on_tool_end" && event\?\.name === "task"[\s\S]*?}\);/)?.[0] ?? "";
+
+    expect(taskStartBlock).toContain("toolCallId: stringValue(event?.run_id)");
+    expect(taskEndBlock).toContain("toolCallId: stringValue(event?.run_id)");
   });
 });
