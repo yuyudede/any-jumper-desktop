@@ -29,5 +29,9 @@ describe("SelectionWindow layout", () => {
     expect(css).toContain("backdrop-filter");
     expect(css).toContain(".selection-liquid-bar");
     expect(css).toContain(".selection-result-panel");
+    expect(css).toContain("selection-panel-open");
+    expect(css).toContain("selection-bar-in");
+    expect(css).toContain("saturate(1.8)");
+    expect(css).toContain("color-mix");
   });
 });

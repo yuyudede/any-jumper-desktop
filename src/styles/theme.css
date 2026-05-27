@@ -1008,6 +1008,32 @@ select {
   margin-top: 2px;
 }
 
+.selection-settings-panel .selection-action-list {
+  display: grid;
+  gap: 12px;
+}
+
+.selection-action-editor {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-soft) 72%, transparent);
+}
+
+.selection-action-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.selection-action-order {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
 .portal-toolbar {
   align-items: end;
   display: grid;
