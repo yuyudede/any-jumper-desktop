@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AppSettings, ModelConfig, Workspace } from "../types";
 import { DEFAULT_PORTAL_SHORTCUT, resolvePortalDefaults } from "./portalDefaults";
+import { resolveSelectionDefaults } from "./selectionActions";
 
 function provider(id: string, defaultModel: string, models: string[] = []): ModelConfig {
   return {
@@ -76,5 +77,29 @@ describe("resolvePortalDefaults", () => {
       model: "gpt-4.1-mini",
       reasoningEffort: "medium",
     });
+  });
+
+  it("uses Selection-specific defaults instead of Portal or new-session defaults", () => {
+    const settings: AppSettings = {
+      gitCommand: "git",
+      portalDefaultProviderId: "openai",
+      portalDefaultModel: "gpt-4.1-mini",
+      defaultNewSessionProviderId: "openai",
+      defaultNewSessionModel: "gpt-4.1",
+      selectionShortcut: "CommandOrControl+Shift+S",
+      selectionDefaultProviderId: "deepseek",
+      selectionDefaultModel: "deepseek-chat",
+      selectionReasoningEffort: "low",
+    };
+
+    const defaults = resolveSelectionDefaults(
+      settings,
+      [provider("openai", "gpt-4.1-mini"), provider("deepseek", "deepseek-chat", ["deepseek-chat"])],
+    );
+
+    expect(defaults.providerId).toBe("deepseek");
+    expect(defaults.model).toBe("deepseek-chat");
+    expect(defaults.reasoningEffort).toBe("low");
+    expect(defaults.shortcut).toBe("CommandOrControl+Shift+S");
   });
 });
