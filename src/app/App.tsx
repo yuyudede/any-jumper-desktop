@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import AgentPage from "../pages/AgentPage";
 import PortalCapsule from "../pages/PortalCapsule";
+import SelectionWindow from "../pages/SelectionWindow";
 import { desktopApi } from "../services/desktopApi";
 import type { ActivityItem, AppSettings } from "../types";
 import type { ThemeMode } from "../main";
@@ -18,6 +19,7 @@ export default function App({ themeMode, onToggleTheme }: AppProps) {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [isWindowFocused, setIsWindowFocused] = useState(true);
   const isPortalCapsule = new URLSearchParams(window.location.search).get("portal") === "capsule";
+  const isSelectionWindow = new URLSearchParams(window.location.search).get("selection") === "window";
 
   useEffect(() => {
     void refreshSettings();
@@ -57,6 +59,10 @@ export default function App({ themeMode, onToggleTheme }: AppProps) {
 
   if (isPortalCapsule) {
     return <PortalCapsule />;
+  }
+
+  if (isSelectionWindow) {
+    return <SelectionWindow />;
   }
 
   return (
