@@ -42,9 +42,14 @@ export default function SelectionWindow() {
   useEffect(() => {
     void loadData();
     let unsubscribe: (() => void) | undefined;
-    void desktopApi.onSelectionEvent(handleSelectionEvent).then((next) => {
-      unsubscribe = next;
-    });
+    void Promise.resolve()
+      .then(() => desktopApi.onSelectionEvent(handleSelectionEvent))
+      .then((next) => {
+        unsubscribe = next;
+      })
+      .catch((eventError) => {
+        setError(errorMessage(eventError));
+      });
 
     const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     const handleMotionChange = () => setReducedMotion(prefersReducedMotion());
