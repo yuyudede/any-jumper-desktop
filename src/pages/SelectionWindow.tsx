@@ -20,6 +20,7 @@ function prefersReducedMotion() {
 export default function SelectionWindow() {
   const params = new URLSearchParams(window.location.search);
   const initialText = params.get("text") || "";
+  const initialCaptureError = params.get("captureError") || undefined;
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [selectedText, setSelectedText] = useState(initialText);
@@ -28,7 +29,7 @@ export default function SelectionWindow() {
   const [activeActionId, setActiveActionId] = useState<string>();
   const [activeIndex, setActiveIndex] = useState(0);
   const [result, setResult] = useState("");
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<string | undefined>(initialCaptureError);
   const [expanded, setExpanded] = useState(false);
   const [sourceOpen, setSourceOpen] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
@@ -141,7 +142,7 @@ export default function SelectionWindow() {
     setError(undefined);
     if (!input) {
       setRunStatus("failed");
-      setError("没有读取到选中文字，请粘贴或输入文本后重试。");
+      setError(initialCaptureError || "没有读取到选中文字，请粘贴或输入文本后重试。");
       return;
     }
     try {

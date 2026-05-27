@@ -85,6 +85,7 @@ type AnyRecord = Record<string, any>;
 type PermissionMode = "readOnly" | "workspaceWrite" | "fullAccess";
 type ToolTraceStream = "stdout" | "stderr" | "result" | "preview";
 type RuntimeTurnStartRequest = TurnStartRequest & { retryItemId?: string };
+type SelectedTextCapture = { text: string; error?: string };
 
 interface ToolTraceReporter {
   started(): void;
@@ -99,6 +100,7 @@ const DEEPAGENTS_RUNTIME_ID = "deepagents";
 const DEEPSEEK_OPENAI_BASE_URL = "https://api.deepseek.com";
 const DEEPSEEK_ANTHROPIC_BASE_URL = "https://api.deepseek.com/anthropic";
 const DEEPSEEK_MODEL_PRESETS = ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"];
+const SELECTION_CLIPBOARD_SENTINEL_PREFIX = "__ANY_JUMPER_SELECTION_COPY__";
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
@@ -3793,16 +3795,54 @@ function resizeCurrentWindowByWidthDelta(event: Electron.IpcMainInvokeEvent, del
   win.setSize(Math.max(minWidth, width + Math.round(delta)), height, false);
 }
 
-async function readSelectedText() {
+function delay(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function selectionCaptureErrorMessage(error: unknown) {
+  const normalized = normalizeError(error);
+  const raw = `${normalized.message}\n${normalized.detail ?? ""}`.toLowerCase();
+  if (raw.includes("assistive") || raw.includes("accessibility") || raw.includes("not allowed")) {
+    return "无法读取选中文字：macOS 可能未授予辅助功能权限，请在系统设置 > 隐私与安全性 > 辅助功能中允许 Any Jumper Desktop。";
+  }
+  return normalized.message || "无法读取选中文字";
+}
+
+function copySelectedTextOnDarwin() {
+  const script = 'tell application "System Events" to keystroke "c" using {command down}';
+  const result = spawnSync("osascript", ["-e", script], { encoding: "utf8", timeout: 1200 });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new AppError(
+      "SELECTION_CAPTURE_FAILED",
+      "无法读取选中文字",
+      [result.stderr, result.stdout].filter(Boolean).join("\n").trim(),
+    );
+  }
+}
+
+async function readSelectedText(): Promise<SelectedTextCapture> {
   const previousText = clipboard.readText();
+  const sentinel = `${SELECTION_CLIPBOARD_SENTINEL_PREFIX}_${randomUUID()}`;
   try {
+    clipboard.writeText(sentinel);
     if (process.platform === "darwin") {
-      const script = 'tell application "System Events" to keystroke "c" using command down';
-      spawnSync("osascript", ["-e", script], { encoding: "utf8", timeout: 1200 });
-      await new Promise((resolve) => setTimeout(resolve, 90));
+      await delay(180);
+      copySelectedTextOnDarwin();
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        await delay(80);
+        const selected = clipboard.readText();
+        if (selected !== sentinel) return { text: selected.trim() };
+      }
+      return {
+        text: "",
+        error: "没有检测到选中文字。请确认文本已被选中；如果仍然失败，请检查 macOS 辅助功能权限。",
+      };
     }
     const selected = clipboard.readText();
-    return selected.trim() && selected !== previousText ? selected : selected.trim();
+    return { text: selected === sentinel ? "" : selected.trim() };
+  } catch (error) {
+    return { text: "", error: selectionCaptureErrorMessage(error) };
   } finally {
     setTimeout(() => clipboard.writeText(previousText), 120);
   }
@@ -4107,10 +4147,11 @@ function setPortalWindowAlwaysOnTop(pinned: boolean) {
   return pinned;
 }
 
-function loadSelectionWindow(win: BrowserWindow, selectedText = "") {
+function loadSelectionWindow(win: BrowserWindow, selectedText = "", captureError?: string) {
   const query = new URLSearchParams();
   query.set("selection", "window");
   if (selectedText) query.set("text", selectedText);
+  if (captureError) query.set("captureError", captureError);
   if (process.env.VITE_DEV_SERVER_URL || !app.isPackaged) {
     void win.loadURL(`${DEV_URL}?${query}`);
   } else {
@@ -4118,7 +4159,7 @@ function loadSelectionWindow(win: BrowserWindow, selectedText = "") {
   }
 }
 
-function createSelectionWindow(selectedText = "") {
+function createSelectionWindow(selectedText = "", captureError?: string) {
   if (selectionWindow && !selectionWindow.isDestroyed()) return selectionWindow;
   const win = new BrowserWindow({
     width: 420,
@@ -4153,15 +4194,18 @@ function createSelectionWindow(selectedText = "") {
     if (selectionWindow === win) selectionWindow = undefined;
   });
 
-  loadSelectionWindow(win, selectedText);
+  loadSelectionWindow(win, selectedText, captureError);
   return win;
 }
 
 async function showSelectionWindow() {
-  const selectedText = await readSelectedText().catch(() => "");
+  const capture = await readSelectedText().catch((error): SelectedTextCapture => ({
+    text: "",
+    error: selectionCaptureErrorMessage(error),
+  }));
   const existing = selectionWindow && !selectionWindow.isDestroyed() ? selectionWindow : undefined;
-  const win = existing ?? createSelectionWindow(selectedText);
-  if (existing) loadSelectionWindow(existing, selectedText);
+  const win = existing ?? createSelectionWindow(capture.text, capture.error);
+  if (existing) loadSelectionWindow(existing, capture.text, capture.error);
   win.center();
   if (process.platform === "darwin") {
     win.setAlwaysOnTop(true, "screen-saver");

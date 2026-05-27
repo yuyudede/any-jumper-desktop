@@ -26,6 +26,10 @@ describe("Selection shortcut wiring", () => {
     expect(source).toContain("selection_shortcut_reregister");
     expect(source).toContain("readSelectedText");
     expect(source).toContain("clipboard.readText");
+    expect(source).toContain("SELECTION_CLIPBOARD_SENTINEL_PREFIX");
+    expect(source).toContain("clipboard.writeText(sentinel)");
+    expect(source).toContain("copySelectedTextOnDarwin");
+    expect(source).toContain("captureError");
     expect(source).toContain("globalShortcut.register(shortcut");
     expect(source).toContain("selection-event");
     expect(preload).toContain("onSelectionEvent");
