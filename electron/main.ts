@@ -35,6 +35,8 @@ import type {
   ProjectContext,
   QueuedInput,
   SelectionEvent,
+  SelectionRunRequest,
+  SelectionRunResult,
   SkillSummary,
   ThreadCreateRequest,
   ThreadDetail,
@@ -69,7 +71,7 @@ import {
 import { AgentBridgeService } from "./agentBridge";
 import { enableDeepSeekReasoningRoundTrip } from "../src/utils/deepseekReasoningRoundTrip";
 import { DEFAULT_MAIN_WINDOW_SHORTCUT, DEFAULT_PORTAL_SHORTCUT } from "../src/utils/portalDefaults";
-import { DEFAULT_SELECTION_SHORTCUT } from "../src/utils/selectionActions";
+import { DEFAULT_SELECTION_ACTIONS, DEFAULT_SELECTION_SHORTCUT, renderSelectionPrompt } from "../src/utils/selectionActions";
 import {
   classifyToolKind,
   createToolSummary,
@@ -2328,6 +2330,71 @@ function legacyDatabaseCandidates() {
   ];
 }
 
+function selectionActionPrompt(actionId: string, selectedText: string) {
+  const configured = settings.get().selectionActions?.find((action) => action.id === actionId);
+  const fallback = DEFAULT_SELECTION_ACTIONS.find((action) => action.id === actionId) || DEFAULT_SELECTION_ACTIONS[0];
+  return renderSelectionPrompt(configured?.promptTemplate || fallback.promptTemplate, selectedText);
+}
+
+function selectSelectionModel(request: SelectionRunRequest) {
+  const appSettings = settings.get();
+  const providerId = request.providerId || appSettings.selectionDefaultProviderId;
+  const provider = providerId
+    ? storage.getModelConfig(providerId)
+    : storage.preferredModelConfig() || storage.listModelConfigs().find((item) => item.enabled && item.id !== "mock") || storage.listModelConfigs()[0];
+  if (!provider) throw new AppError("UNKNOWN_ERROR", "请先配置可用模型");
+  validateModelProvider(provider);
+  const model = request.model || appSettings.selectionDefaultModel || provider.defaultModel;
+  const reasoningEffort = request.reasoningEffort || appSettings.selectionReasoningEffort;
+  return { provider, model, reasoningEffort };
+}
+
+async function streamSelectionText(runId: string, text: string) {
+  for (let i = 0; i < text.length; i += 24) {
+    emitSelectionEvent({ runId, event: "selection.delta", payload: { delta: text.slice(i, i + 24) } });
+    await new Promise((resolve) => setTimeout(resolve, 12));
+  }
+}
+
+async function runSelectionAction(request: SelectionRunRequest): Promise<SelectionRunResult> {
+  const runId = newId("selection");
+  const selectedText = String(request.selectedText || "").trim();
+  if (!selectedText) throw new AppError("UNKNOWN_ERROR", "没有读取到选中文字");
+  const { provider, model, reasoningEffort } = selectSelectionModel(request);
+  if (provider.providerKind !== "mock" && provider.providerKind !== "ollama" && !secrets.get(`ai-model-api-key-${provider.id}`)) {
+    throw new AppError("TOKEN_MISSING", `请先为 ${provider.displayName} 配置 API Key`);
+  }
+  const prompt = selectionActionPrompt(String(request.actionId || ""), selectedText);
+  emitSelectionEvent({ runId, event: "selection.started", payload: { actionId: request.actionId, model } });
+  void (async () => {
+    try {
+      if (provider.providerKind === "mock") {
+        await streamSelectionText(runId, `Mock Selection 已收到：${selectedText}`);
+        emitSelectionEvent({ runId, event: "selection.completed" });
+        return;
+      }
+      const chat = createChatModel(provider, model, reasoningEffort);
+      const stream = await chat.stream([new HumanMessage({ content: prompt })] as any);
+      let emitted = false;
+      for await (const chunk of stream as any) {
+        const delta = extractContent(chunk);
+        if (!delta) continue;
+        emitted = true;
+        emitSelectionEvent({ runId, event: "selection.delta", payload: { delta } });
+      }
+      if (!emitted) {
+        const output = await chat.invoke([new HumanMessage({ content: prompt })] as any);
+        const delta = extractContent(output);
+        if (delta) emitSelectionEvent({ runId, event: "selection.delta", payload: { delta } });
+      }
+      emitSelectionEvent({ runId, event: "selection.completed" });
+    } catch (error) {
+      emitSelectionEvent({ runId, event: "selection.failed", payload: normalizeRuntimeError(error, { model, provider }) });
+    }
+  })();
+  return { runId, status: "started" };
+}
+
 async function discoverProviderModels(id: string): Promise<string[]> {
   const config = storage.getModelConfig(id);
   validateModelProvider(config);
@@ -3854,6 +3921,7 @@ function registerIpcHandlers() {
         case "selection_shortcut_reregister": return registerSelectionShortcut();
         case "selection_window_show": return showSelectionWindow();
         case "selection_window_hide": return hideSelectionWindow();
+        case "selection_run_action": return runSelectionAction(args.request);
         case "usage_dashboard": return storage.usageDashboard(args.request);
         case "usage_sync_external": return storage.syncExternalUsage();
         case "open_external_url": return openExternalUrl(args.url);

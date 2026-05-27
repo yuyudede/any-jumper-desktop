@@ -30,4 +30,16 @@ describe("Selection shortcut wiring", () => {
     expect(source).toContain("selection-event");
     expect(preload).toContain("onSelectionEvent");
   });
+
+  it("runs Selection actions without creating conversation threads", () => {
+    const source = readProjectFile("electron/main.ts");
+
+    expect(source).toContain("runSelectionAction");
+    expect(source).toContain("emitSelectionEvent");
+    expect(source).toContain('case "selection_run_action": return runSelectionAction(args.request);');
+    expect(source).toContain("createChatModel");
+    expect(source).toContain("selection.delta");
+    expect(source).toContain("selection.completed");
+    expect(source).not.toContain("selection_run_action\": return storage.createThread");
+  });
 });
