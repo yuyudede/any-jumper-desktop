@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentEvent, SubagentTask } from "../types";
-import { reduceSubagentTasks } from "./subagentTracker";
+import { reduceSubagentTasks, reduceSubagentTasksByThreadId } from "./subagentTracker";
 
 function event(partial: Partial<AgentEvent>): AgentEvent {
   return {
@@ -26,6 +26,7 @@ describe("subagent task tracker", () => {
       {
         id: "task-1",
         title: "分析项目结构",
+        agentType: "general-purpose",
         status: "running",
         createdAt: 1_000,
       },
@@ -153,6 +154,38 @@ describe("subagent task tracker", () => {
     }));
 
     expect(tasks.map((task) => task.id)).toEqual(["task-2", "task-1"]);
+  });
+
+  it("keeps task state isolated per thread", () => {
+    let tasksByThread = reduceSubagentTasksByThreadId({}, event({
+      threadId: "thread-1",
+      toolCallId: "task-1",
+      payload: {
+        name: "task",
+        status: "started",
+        input: { description: "会话一任务", subagent_type: "general-purpose" },
+      },
+    }));
+
+    tasksByThread = reduceSubagentTasksByThreadId(tasksByThread, event({
+      threadId: "thread-2",
+      toolCallId: "task-2",
+      payload: {
+        name: "task",
+        status: "started",
+        input: { description: "会话二任务", subagent_type: "general-purpose" },
+      },
+    }));
+
+    tasksByThread = reduceSubagentTasksByThreadId(tasksByThread, event({
+      event: "turn.started",
+      threadId: "thread-2",
+      createdAt: 3_000,
+      payload: { status: "running" },
+    }));
+
+    expect(tasksByThread["thread-1"].map((task) => task.title)).toEqual(["会话一任务"]);
+    expect(tasksByThread["thread-2"]).toBeUndefined();
   });
 
   it("marks running tasks failed when the turn fails", () => {

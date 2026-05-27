@@ -52,4 +52,16 @@ describe("TasksBar presentation", () => {
     expect(summaryBlock).toContain("overflow-wrap: anywhere;");
     expect(summaryBlock).toContain("white-space: normal;");
   });
+
+  it("shows task metadata such as type, status, and duration", () => {
+    const source = readProjectFile("src/components/TasksBar.tsx");
+    const css = readProjectFile("src/styles/theme.css");
+    const metaBlock = cssBlock(css, ".tasks-bar-item-meta");
+
+    expect(source).toContain("task.agentType");
+    expect(source).toContain("statusLabel(task.status)");
+    expect(source).toContain("durationLabel(task)");
+    expect(source).toContain("tasks-bar-item-meta");
+    expect(metaBlock).toContain("flex-wrap: wrap;");
+  });
 });

@@ -1,0 +1,59 @@
+- generic:
+  - generic:
+    - generic:
+      - generic "弹窗遮罩" [ref=e1]
+      - generic [ref=e2]:
+        - generic [ref=e3]:
+          - generic [ref=e4]:
+            - generic [ref=e5]: 登录后推荐更懂你的笔记
+            - img
+          - generic [ref=e6]:
+            - img [ref=e8]
+            - generic [ref=e9]:
+              - text: 可用
+              - generic [ref=e10]:
+                - img [ref=e11]
+                - text: 小红书
+              - text: 或
+              - generic [ref=e13]:
+                - img [ref=e14]
+                - text: 微信
+              - text: 扫码
+          - generic [ref=e16] [cursor=pointer]:
+            - img [ref=e17]
+            - text: 小红书如何扫码
+        - generic [ref=e19]:
+          - generic [ref=e20]: 手机号登录
+          - generic [ref=e22]:
+            - generic [ref=e23]:
+              - generic [ref=e24]: "+86"
+              - textbox "+86" [active] [ref=e25]:
+                - /placeholder: 输入手机号
+            - generic [ref=e27]:
+              - spinbutton "获取验证码" [ref=e28]
+              - generic [ref=e29] [cursor=pointer]: 获取验证码
+            - button "登录" [ref=e31] [cursor=pointer]
+          - generic [ref=e35]:
+            - text: 我已阅读并同意
+            - link "《用户协议》" [ref=e37] [cursor=pointer]:
+              - /url: https://agree.xiaohongshu.com/h5/terms/ZXXY20220331001/-1
+            - link "《隐私政策》" [ref=e39] [cursor=pointer]:
+              - /url: https://agree.xiaohongshu.com/h5/terms/ZXXY20220509001/-1
+            - link "《儿童/青少年个人信息保护规则》" [ref=e41] [cursor=pointer]:
+              - /url: https://oa.xiaohongshu.com/h5/terms/ZXXY20220516001/-1
+          - generic [ref=e42]: 新用户可直接登录
+      - generic [ref=e43]: 帮助与反馈：小红书 App 点击“我 - 帮助与客服”进行反馈
+    - generic [ref=e44]:
+      - generic [ref=e45]:
+        - button [ref=e48] [cursor=pointer]:
+          - img [ref=e50]
+        - generic [ref=e52]: 活动
+        - generic [ref=e53]:
+          - button [ref=e55] [cursor=pointer]:
+            - img [ref=e57]
+          - button [ref=e59] [cursor=pointer]:
+            - img [ref=e61]
+          - button [ref=e63] [cursor=pointer]:
+            - img [ref=e65]
+      - iframe [ref=e67]:
+        

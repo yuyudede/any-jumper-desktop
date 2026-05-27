@@ -146,6 +146,25 @@ describe("thinking trace reducer", () => {
     expect(section?.summary).toBe("正在记录 1 条进度");
   });
 
+  it("uses the persisted turn start when the live trace starts from a later event", () => {
+    const trace = reduceThinkingTraceByTurn({}, event({
+      event: "progress.note",
+      createdAt: 60_000,
+      payload: progressNote({
+        content: "模型还在处理，我先同步一下当前进度。",
+        status: "running",
+        createdAt: 60_000,
+      }),
+    }));
+
+    const section = thinkingTraceSectionForTurn({
+      traceByTurn: trace,
+      turn: turn({ status: "running", startedAt: 1_000, completedAt: undefined }),
+    });
+
+    expect(section?.startedAt).toBe(1_000);
+  });
+
   it("maps provider-exposed reasoning notes separately from progress notes", () => {
     const section = thinkingTraceSectionForTurn({
       traceByTurn: {},

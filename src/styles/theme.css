@@ -4497,12 +4497,35 @@ select {
   gap: 5px;
   color: var(--text);
   font-size: 13px;
-  line-height: 1.56;
+  line-height: 1.48;
 }
 
 .turn-trace-thought-text p {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+/* Trace 中的 MarkdownRenderer 继承面板语境，不使用聊天正文默认色重 */
+.turn-trace-thought-text .markdown-body {
+  font-size: 13px;
+  font-weight: 450;
+  line-height: 1.48;
+}
+
+.turn-trace-meta-summary .markdown-body,
+.turn-trace-detail-markdown .markdown-body,
+.turn-trace-item-detail .markdown-body {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}
+
+.turn-trace-meta-summary .md-p,
+.turn-trace-detail-markdown .md-p,
+.turn-trace-item-detail .md-p,
+.turn-trace-thought-text .md-p {
+  line-height: inherit;
 }
 
 .turn-trace-tool-details {
@@ -4564,33 +4587,6 @@ select {
   font-size: 10.75px;
   font-weight: 560;
   white-space: nowrap;
-}
-
-.turn-trace-reasoning {
-  display: grid;
-  max-width: 78ch;
-  gap: 6px;
-  color: var(--text);
-  font-size: 12.5px;
-  line-height: 1.58;
-}
-
-.turn-trace-reasoning-paragraph {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.turn-trace-reasoning-truncated {
-  width: fit-content;
-  border: 1px solid color-mix(in srgb, var(--warn) 22%, var(--line));
-  border-left: 2px solid var(--warn);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--warn) 8%, transparent);
-  color: var(--warn);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.38;
-  padding: 5px 8px;
 }
 
 .turn-trace-item-detail {
@@ -8750,7 +8746,7 @@ pre:last-child {
 
 .tasks-bar-item {
   display: grid;
-  grid-template-columns: 18px minmax(92px, max-content) minmax(0, 1fr) auto;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: start;
   gap: 8px;
   padding: 8px;
@@ -8771,6 +8767,19 @@ pre:last-child {
   padding-top: 2px;
 }
 
+.tasks-bar-item-main {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.tasks-bar-item-title-row {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 6px;
+}
+
 .tasks-bar-item.running .tasks-bar-item-icon {
   color: var(--warn);
 }
@@ -8785,12 +8794,49 @@ pre:last-child {
 
 .tasks-bar-item-title {
   min-width: 0;
-  max-width: 220px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+  white-space: normal;
   font-weight: 500;
   color: var(--text);
+}
+
+.tasks-bar-item-status {
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: 999px;
+  padding: 1px 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.tasks-bar-item-status.running {
+  border-color: color-mix(in srgb, var(--warn) 34%, var(--line));
+  color: var(--warn);
+}
+
+.tasks-bar-item-status.completed {
+  border-color: color-mix(in srgb, var(--success) 30%, var(--line));
+  color: var(--success);
+}
+
+.tasks-bar-item-status.failed {
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--line));
+  color: var(--danger);
+}
+
+.tasks-bar-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.35;
 }
 
 .tasks-bar-item-summary {
@@ -8826,7 +8872,7 @@ pre:last-child {
   }
 
   .tasks-bar-item-summary {
-    grid-column: 2 / -1;
+    grid-column: 1 / -1;
   }
 }
 

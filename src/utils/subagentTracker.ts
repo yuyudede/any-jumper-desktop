@@ -2,6 +2,26 @@ import type { AgentEvent, SubagentTask, SubagentTaskStatus } from "../types";
 
 const SUMMARY_LIMIT = 200;
 
+export type SubagentTasksByThreadId = Record<string, SubagentTask[]>;
+
+export function reduceSubagentTasksByThreadId(
+  current: SubagentTasksByThreadId,
+  event: AgentEvent,
+): SubagentTasksByThreadId {
+  const existing = current[event.threadId];
+  const previous = existing ?? [];
+  const next = reduceSubagentTasks(previous, event);
+
+  if (next === previous) return current;
+  if (next.length === 0) {
+    if (!existing) return current;
+    const { [event.threadId]: _removed, ...rest } = current;
+    return rest;
+  }
+
+  return { ...current, [event.threadId]: next };
+}
+
 export function reduceSubagentTasks(
   current: SubagentTask[],
   event: AgentEvent,
@@ -35,9 +55,11 @@ export function reduceSubagentTasks(
   if (status === "running") {
     const id = taskIdFromEvent(event, payload) || `task:${event.turnId ?? event.threadId}:${event.createdAt}`;
     const fallbackTitle = `子代理 ${current.length + 1}`;
+    const agentType = taskAgentType(payload.input);
     const nextTask: SubagentTask = {
       id,
       title: taskTitle(payload.input, fallbackTitle),
+      ...(agentType ? { agentType } : {}),
       status: "running",
       createdAt: event.createdAt,
     };
@@ -100,6 +122,31 @@ function taskIdFromEvent(event: AgentEvent, payload: Record<string, unknown> | u
 
 function taskTitle(input: unknown, fallback: string) {
   return titleFromValue(input) || fallback;
+}
+
+function taskAgentType(input: unknown) {
+  return agentTypeFromValue(input);
+}
+
+function agentTypeFromValue(value: unknown, depth = 0): string | undefined {
+  if (depth > 4) return undefined;
+
+  const record = recordValue(value);
+  if (!record) return undefined;
+
+  const direct = stringValue(record.subagent_type)
+    || stringValue(record.subagentType)
+    || stringValue(record.agent_type)
+    || stringValue(record.agentType)
+    || stringValue(record.type);
+  if (direct) return direct;
+
+  for (const key of ["input", "args", "kwargs", "tool_input", "request", "config"]) {
+    const nested = agentTypeFromValue(record[key], depth + 1);
+    if (nested) return nested;
+  }
+
+  return undefined;
 }
 
 function titleFromValue(value: unknown, depth = 0): string | undefined {

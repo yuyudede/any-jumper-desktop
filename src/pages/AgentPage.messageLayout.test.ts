@@ -673,18 +673,28 @@ describe("AgentPage transcript message layout", () => {
     expect(css).not.toContain(".turn-trace-row-action");
   });
 
-  it("formats reasoning trace text as readable paragraphs with truncation feedback", () => {
+  it("renders intact reasoning trace through MarkdownRenderer", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
-    const css = readProjectFile("src/styles/theme.css");
 
-    expect(source).toContain("formatTraceThoughtText");
-    expect(source).toContain("TraceThoughtText");
     expect(source).toContain('item.kind === "reasoning"');
-    expect(source).toContain("turn-trace-reasoning");
-    expect(css).toContain(".turn-trace-reasoning");
-    expect(css).toContain(".turn-trace-reasoning-paragraph");
-    expect(css).toContain(".turn-trace-reasoning-truncated");
-    expect(css).toContain("max-width: 78ch;");
+    expect(source).toContain('item.kind === "reasoning" ? (\n        <MarkdownRenderer content={item.title} />');
+    expect(source).not.toContain("TraceThoughtText");
+    expect(source).toContain('<div className="turn-trace-item-detail">');
+  });
+
+  it("keeps trace Markdown visually integrated with the compact trace panel", () => {
+    const css = readProjectFile("src/styles/theme.css");
+    const thoughtMarkdownBlock = css.match(/\.turn-trace-thought-text \.markdown-body\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const traceMarkdownInheritanceBlock =
+      css.match(/\.turn-trace-meta-summary \.markdown-body,\s*\n\.turn-trace-detail-markdown \.markdown-body,\s*\n\.turn-trace-item-detail \.markdown-body\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+    const traceParagraphInheritanceBlock =
+      css.match(/\.turn-trace-meta-summary \.md-p,\s*\n\.turn-trace-detail-markdown \.md-p,\s*\n\.turn-trace-item-detail \.md-p,\s*\n\.turn-trace-thought-text \.md-p\s*\{(?<body>[^}]*)\}/)?.groups?.body ?? "";
+
+    expect(thoughtMarkdownBlock).toContain("font-weight: 450;");
+    expect(thoughtMarkdownBlock).toContain("line-height: 1.48;");
+    expect(traceMarkdownInheritanceBlock).toContain("color: inherit;");
+    expect(traceMarkdownInheritanceBlock).toContain("font-weight: inherit;");
+    expect(traceParagraphInheritanceBlock).toContain("line-height: inherit;");
   });
 
   it("keeps live progress chatter out of assistant markdown while still feeding trace", () => {

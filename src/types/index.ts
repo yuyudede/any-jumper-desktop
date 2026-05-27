@@ -7,6 +7,7 @@ export type SubagentTaskStatus = "running" | "completed" | "failed";
 export interface SubagentTask {
   id: string;
   title: string;
+  agentType?: string;
   status: SubagentTaskStatus;
   summary?: string;
   createdAt: number;

@@ -54,7 +54,6 @@ import type {
 } from "../src/types";
 import { parseGitStatusEntries } from "../src/utils/gitStatus";
 import { extractModelOutputParts, stripExposedThinking } from "../src/utils/modelReasoning";
-import { truncateTraceThoughtText } from "../src/utils/traceThoughtText";
 import { TurnOutputClassifier, type TurnOutputSegment } from "../src/utils/turnOutputClassifier";
 import {
   claudeCodeUsageEventsFromJsonl,
@@ -62,6 +61,8 @@ import {
   groupUsageByModel,
   groupUsageBySession,
   summarizeUsage,
+  turnTokenUsageFromModelOutput,
+  turnTokenUsageFromRuntimeCheckpoint,
   type ExternalUsageEvent,
 } from "../src/utils/usageStats";
 import { AgentBridgeService } from "./agentBridge";
@@ -268,6 +269,48 @@ function formatRecoverableToolError(error: NormalizedError) {
   return `工具调用失败：${error.message}${detail}\n\n请根据错误信息调整下一步操作。`;
 }
 
+function parseExternalHttpUrl(url: unknown) {
+  if (typeof url !== "string") return undefined;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") return parsed;
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+function openExternalUrl(url: unknown) {
+  const parsed = parseExternalHttpUrl(url);
+  if (!parsed) throw new AppError("INVALID_EXTERNAL_URL", "仅支持打开 http/https 外部链接");
+  return shell.openExternal(parsed.href);
+}
+
+function isSameOriginNavigation(win: BrowserWindow, url: string) {
+  try {
+    const current = new URL(win.webContents.getURL());
+    const next = new URL(url);
+    return current.origin === next.origin;
+  } catch {
+    return false;
+  }
+}
+
+function attachExternalLinkHandlers(win: BrowserWindow) {
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    const parsed = parseExternalHttpUrl(url);
+    if (parsed) void shell.openExternal(parsed.href);
+    return { action: "deny" };
+  });
+  win.webContents.on("will-navigate", (event, url) => {
+    if (isSameOriginNavigation(win, url)) return;
+    const parsed = parseExternalHttpUrl(url);
+    if (!parsed) return;
+    event.preventDefault();
+    void shell.openExternal(parsed.href);
+  });
+}
+
 function emitAgentEvent(event: Omit<AgentEvent, "createdAt">) {
   const payload: AgentEvent = { ...event, createdAt: nowMillis() };
   for (const win of windows) {
@@ -344,6 +387,7 @@ class StorageService {
     this.migrate();
     this.ensureDefaults();
     this.recoverStaleRunningTurns();
+    this.backfillTurnTokenUsageFromCheckpoints();
   }
 
   private prepareDatabasePath(userData: string) {
@@ -623,6 +667,31 @@ class StorageService {
     this.db.prepare("UPDATE turns SET status='interrupted', completed_at=? WHERE status='running'").run(now);
     this.db.prepare("UPDATE items SET status='error' WHERE role='assistant' AND status='running'").run();
     this.db.prepare("UPDATE threads SET status='interrupted', updated_at=? WHERE status='running'").run(now);
+  }
+
+  private backfillTurnTokenUsageFromCheckpoints() {
+    const rows = this.db.prepare(`
+      SELECT t.id, rc.checkpoint_json
+      FROM turns t
+      JOIN runtime_checkpoints rc ON rc.turn_id=t.id
+      WHERE t.status='completed'
+        AND (t.token_usage_json IS NULL OR t.token_usage_json='')
+        AND rc.checkpoint_json IS NOT NULL
+        AND rc.checkpoint_json <> ''
+    `).all();
+    if (rows.length === 0) return;
+    const update = this.db.prepare(`
+      UPDATE turns SET token_usage_json=?
+      WHERE id=? AND (token_usage_json IS NULL OR token_usage_json='')
+    `);
+    const backfill = this.db.transaction((items: any[]) => {
+      for (const row of items) {
+        const usage = turnTokenUsageFromRuntimeCheckpoint(row.checkpoint_json);
+        if (!usage) continue;
+        update.run(JSON.stringify(usage), row.id);
+      }
+    });
+    backfill(rows);
   }
 
   private ensureDefaults() {
@@ -1986,17 +2055,8 @@ class AgentRuntimeService {
           }
           outputClassifier.appendModelText(parts.content);
         }
-        // Track usage_metadata from the final chunk of the model stream
-        const chunkUsage = chunk?.usage_metadata;
-        if (chunkUsage && typeof chunkUsage.input_tokens === "number") {
-          turnTokenUsage = {
-            inputTokens: chunkUsage.input_tokens,
-            outputTokens: chunkUsage.output_tokens,
-            totalTokens: chunkUsage.total_tokens,
-            cacheCreation: chunkUsage.input_token_details?.cache_creation,
-            cacheRead: chunkUsage.input_token_details?.cache_read,
-          };
-        }
+        const chunkUsage = turnTokenUsageFromModelOutput(chunk);
+        if (chunkUsage) turnTokenUsage = chunkUsage;
       }
       if (event?.event === "on_tool_start") {
         flushTurnOutputSegments(ctx, outputClassifier.flushBeforeToolCall());
@@ -2465,7 +2525,7 @@ function recordProgressNote(ctx: RuntimeContext, content: string, status: Progre
   if (!normalizedContent) return undefined;
   const now = nowMillis();
   const noteContent = kind === "reasoning"
-    ? truncateTraceThoughtText(content).content
+    ? content.trim()
     : normalizedContent.length > 240
       ? `${normalizedContent.slice(0, 240)}...`
       : normalizedContent;
@@ -3483,35 +3543,23 @@ function extractContent(chunk: any): string {
 function extractFinalOutputParts(output: any): { content: string; reasoning: string } & {
   usage?: { inputTokens: number; outputTokens: number; totalTokens: number; cacheCreation?: number; cacheRead?: number };
 } {
-  // Helper to extract usage from a LangChain AIMessage-like object
-  function extractUsage(obj: any): ReturnType<typeof extractFinalOutputParts>["usage"] | undefined {
-    const meta = obj?.usage_metadata;
-    if (meta && typeof meta.input_tokens === "number") {
-      return {
-        inputTokens: meta.input_tokens,
-        outputTokens: meta.output_tokens,
-        totalTokens: meta.total_tokens,
-        cacheCreation: meta.input_token_details?.cache_creation,
-        cacheRead: meta.input_token_details?.cache_read,
-      };
-    }
-    return undefined;
-  }
-
-  // Try direct usage_metadata on output itself (e.g. AIMessage as top-level output)
-  const directUsage = extractUsage(output);
+  const messages = output?.messages;
+  const directUsage = Array.isArray(messages) ? undefined : turnTokenUsageFromModelOutput(output);
   if (directUsage) return { ...extractModelOutputParts(output), usage: directUsage };
 
   // Try searching output.messages for the last AI message
-  const messages = output?.messages;
   if (Array.isArray(messages)) {
     for (const message of [...messages].reverse()) {
       const type = message?._getType?.() ?? message?.type ?? message?.role;
       if (type === "ai" || type === "assistant") {
         const parts = extractModelOutputParts(message);
-        const usage = extractUsage(message);
+        const usage = turnTokenUsageFromModelOutput(message);
         if (parts.content || parts.reasoning || usage) return { ...parts, usage };
       }
+    }
+    for (const message of [...messages].reverse()) {
+      const usage = turnTokenUsageFromModelOutput(message);
+      if (usage) return { content: "", reasoning: "", usage };
     }
   }
   return { content: "", reasoning: "" };
@@ -3755,7 +3803,7 @@ function registerIpcHandlers() {
         case "portal_open_chat": return createWindow(args.workspaceId, args.threadId);
         case "usage_dashboard": return storage.usageDashboard(args.request);
         case "usage_sync_external": return storage.syncExternalUsage();
-        case "open_external_url": return shell.openExternal(args.url);
+        case "open_external_url": return openExternalUrl(args.url);
         case "agent_bridge_status": return agentBridge.status();
         case "agent_bridge_restart": return agentBridge.restart();
         case "agent_bridge_clear_logs": {
@@ -3830,6 +3878,7 @@ function createWindow(workspaceId?: string, threadId?: string) {
   });
   windows.add(win);
   mainWindows.add(win);
+  attachExternalLinkHandlers(win);
   win.on("minimize" as any, (event: { preventDefault(): void }) => {
     event.preventDefault();
     win.hide();
@@ -3886,6 +3935,7 @@ function createPortalWindow() {
   portalWindow = win;
   applyPortalWindowPin(win, portalWindowPinned);
   windows.add(win);
+  attachExternalLinkHandlers(win);
   win.on("closed", () => {
     windows.delete(win);
     if (portalWindow === win) portalWindow = undefined;

@@ -14,6 +14,6 @@ describe("SubagentTaskIndicator", () => {
     const source = readProjectFile("src/components/SubagentTaskIndicator.tsx");
 
     expect(source).toContain("completedCount");
-    expect(source).toContain("{completedCount} done");
+    expect(source).toContain("{completedCount} 完成");
   });
 });

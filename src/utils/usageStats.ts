@@ -6,6 +6,7 @@ import type {
   UsageSessionSummary,
   UsageSource,
   UsageSummary,
+  TurnTokenUsage,
 } from "../types";
 
 export type ExternalUsageEvent = NormalizedUsageEvent & {
@@ -36,6 +37,13 @@ type TokenLike = {
     cache_creation?: unknown;
     cache_read?: unknown;
   };
+  prompt_tokens_details?: {
+    cached_tokens?: unknown;
+    cache_creation?: unknown;
+    cache_read?: unknown;
+  };
+  prompt_cache_hit_tokens?: unknown;
+  prompt_cache_miss_tokens?: unknown;
 };
 
 type TotalsInput = Partial<NormalizedUsageEvent> & Partial<UsageNormalizedTotals>;
@@ -504,6 +512,62 @@ export function codexUsageEventsFromJsonl(content: string, filePath: string): {
   return { events, errors };
 }
 
+export function turnTokenUsageFromRuntimeCheckpoint(checkpoint: string | unknown): TurnTokenUsage | undefined {
+  if (!checkpoint) return undefined;
+  if (typeof checkpoint !== "string") return turnTokenUsageFromModelOutput(checkpoint);
+  try {
+    return turnTokenUsageFromModelOutput(JSON.parse(checkpoint));
+  } catch {
+    return undefined;
+  }
+}
+
+export function turnTokenUsageFromModelOutput(output: unknown): TurnTokenUsage | undefined {
+  const direct = turnTokenUsageFromUsageContainer(output);
+  if (direct) return direct;
+  const record = objectValue(output);
+  const messages = arrayValue(record?.messages) || arrayValue(objectValue(record?.kwargs)?.messages);
+  if (!messages) return undefined;
+  for (const message of [...messages].reverse()) {
+    const usage = turnTokenUsageFromUsageContainer(message);
+    if (usage) return usage;
+  }
+  return undefined;
+}
+
+function turnTokenUsageFromUsageContainer(value: unknown): TurnTokenUsage | undefined {
+  const record = objectValue(value);
+  if (!record) return undefined;
+  const kwargs = objectValue(record.kwargs);
+  const candidates = [
+    record.usage_metadata,
+    record.usageMetadata,
+    kwargs?.usage_metadata,
+    kwargs?.usageMetadata,
+    objectValue(record.response_metadata)?.usage,
+    objectValue(record.response_metadata)?.tokenUsage,
+    objectValue(record.response_metadata)?.token_usage,
+    objectValue(kwargs?.response_metadata)?.usage,
+    objectValue(kwargs?.response_metadata)?.tokenUsage,
+    objectValue(kwargs?.response_metadata)?.token_usage,
+    record.usage,
+    kwargs?.usage,
+  ];
+  for (const candidate of candidates) {
+    const tokens = tokensFromUsage(objectValue(candidate) as TokenLike | undefined);
+    if (!hasTokenUsage(tokens)) continue;
+    const usage: TurnTokenUsage = {
+      inputTokens: tokens.inputTokens,
+      outputTokens: tokens.outputTokens,
+      totalTokens: tokens.totalTokens,
+    };
+    if (tokens.cacheCreationTokens > 0) usage.cacheCreation = tokens.cacheCreationTokens;
+    if (tokens.cacheReadTokens > 0) usage.cacheRead = tokens.cacheReadTokens;
+    return usage;
+  }
+  return undefined;
+}
+
 export function tokensFromUsage(usage: TokenLike | undefined): UsageNormalizedTotals {
   if (!usage) return zeroTotals;
   const inputTokens = safeToken(usage.inputTokens ?? usage.input_tokens ?? usage.prompt_tokens);
@@ -517,7 +581,10 @@ export function tokensFromUsage(usage: TokenLike | undefined): UsageNormalizedTo
     usage.cacheReadTokens
       ?? usage.cache_read_input_tokens
       ?? usage.cached_input_tokens
-      ?? usage.input_token_details?.cache_read,
+      ?? usage.input_token_details?.cache_read
+      ?? usage.prompt_tokens_details?.cached_tokens
+      ?? usage.prompt_tokens_details?.cache_read
+      ?? usage.prompt_cache_hit_tokens,
   );
   const totalTokens = safeToken(usage.totalTokens ?? usage.total_tokens)
     || inputTokens + outputTokens;
@@ -733,6 +800,14 @@ function timestampMillis(value: unknown) {
 
 function stringValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function objectValue(value: unknown): Record<string, any> | undefined {
+  return value && typeof value === "object" ? value as Record<string, any> : undefined;
+}
+
+function arrayValue(value: unknown): unknown[] | undefined {
+  return Array.isArray(value) ? value : undefined;
 }
 
 function normalizeExternalModelName(value: string | undefined) {

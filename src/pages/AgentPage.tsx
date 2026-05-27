@@ -123,7 +123,6 @@ import {
   type ThinkingTraceSection,
   type TurnTokenUsage,
 } from "../utils/thinkingTrace";
-import { formatTraceThoughtText } from "../utils/traceThoughtText";
 import { turnTraceHeadline } from "../utils/turnTraceDisplay";
 import {
   buildToolTraceCardsForTurn,
@@ -131,7 +130,10 @@ import {
   type ToolTraceCardModel,
   type ToolTraceByTurn,
 } from "../utils/toolTrace";
-import { reduceSubagentTasks } from "../utils/subagentTracker";
+import {
+  reduceSubagentTasksByThreadId,
+  type SubagentTasksByThreadId,
+} from "../utils/subagentTracker";
 import { stripProgressChatter } from "../utils/progressChatter";
 import {
   DEEPAGENTS_RUNTIME_ID,
@@ -270,7 +272,7 @@ export default function AgentPage({
   }, [sidebarWidth]);
 
   const [terminalVisible, setTerminalVisible] = useState(false);
-  const [subagentTasks, setSubagentTasks] = useState<SubagentTask[]>([]);
+  const [subagentTasksByThreadId, setSubagentTasksByThreadId] = useState<SubagentTasksByThreadId>({});
   const [tasksBarExpanded, setTasksBarExpanded] = useState(false);
   const toggleTasksBarExpanded = useCallback(() => {
     setTasksBarExpanded((value) => !value);
@@ -379,6 +381,10 @@ export default function AgentPage({
     }
   }, [activeWorkspace?.rootPath, pushActivity, setRightPanelOpenWithWindowResize]);
   const activeWorkspaceThreads = workspaceId ? threadsByWorkspaceId[workspaceId] || [] : [];
+  const subagentTasks = useMemo(
+    () => (threadId ? subagentTasksByThreadId[threadId] || [] : []),
+    [subagentTasksByThreadId, threadId],
+  );
   const activeThread = detail?.thread || activeWorkspaceThreads.find((thread) => thread.id === threadId) || findThreadById(threadsByWorkspaceId, threadId);
   const activeModel = models.find((model) => model.id === selectedProvider);
   const needsModelKey = Boolean(activeModel && activeModel.providerKind !== "mock" && activeModel.providerKind !== "ollama");
@@ -472,11 +478,6 @@ export default function AgentPage({
   useEffect(() => {
     registerBuiltinCommands(() => skills);
   }, [skills]);
-
-  useEffect(() => {
-    setSubagentTasks([]);
-    setTasksBarExpanded(false);
-  }, [threadId]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -1126,10 +1127,10 @@ export default function AgentPage({
   }
 
   function handleAgentEvent(event: AgentEvent) {
+    setSubagentTasksByThreadId((current) => reduceSubagentTasksByThreadId(current, event));
     if (event.threadId !== threadId) return;
     setThinkingTraceByTurn((current) => reduceThinkingTraceByTurn(current, event));
     setToolTraceByTurn((current) => reduceToolTraceByTurn(current, event));
-    setSubagentTasks((current) => reduceSubagentTasks(current, event));
     setDetail((current) => applyEvent(current, event));
     if ((event.event === "turn.completed" || event.event === "turn.failed") && event.turnId) {
       const payload = event.payload as Record<string, unknown> | undefined;
@@ -3530,7 +3531,9 @@ function TurnTraceMetaRow({
   return (
     <div className={`turn-trace-meta-row is-${status}`}>
       <TerminalSquare className="turn-trace-meta-icon" size={15} />
-      <span>{summary}</span>
+      <span className="turn-trace-meta-summary">
+        <MarkdownRenderer content={summary} />
+      </span>
     </div>
   );
 }
@@ -3539,11 +3542,15 @@ function TurnTraceThought({ item }: { item: ThinkingTraceItem }) {
   return (
     <div className={`turn-trace-thought-text is-${item.status} is-${item.kind}`}>
       {item.kind === "reasoning" ? (
-        <TraceThoughtText text={item.title} />
+        <MarkdownRenderer content={item.title} />
       ) : (
-        <p>{item.title}</p>
+        <MarkdownRenderer content={item.title} />
       )}
-      {item.detail ? <small className="turn-trace-item-detail">{item.detail}</small> : null}
+      {item.detail ? (
+        <div className="turn-trace-item-detail">
+          <MarkdownRenderer content={item.detail} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -3594,7 +3601,9 @@ function TurnTraceTimelineDetail({
         {row.detail ? (
           <div className="turn-trace-row-detail-line">
             <span>输入</span>
-            <code>{row.detail}</code>
+            <div className="turn-trace-detail-markdown">
+              <MarkdownRenderer content={row.detail} />
+            </div>
           </div>
         ) : null}
         {row.progress.length > 0 ? (
@@ -3666,23 +3675,6 @@ function TraceTokenUsage({ tokenUsage }: { tokenUsage?: TurnTokenUsage }) {
         </span>
       ))}
     </span>
-  );
-}
-
-function TraceThoughtText({ text }: { text: string }) {
-  const blocks = formatTraceThoughtText(text);
-  if (blocks.length === 0) return null;
-
-  return (
-    <div className="turn-trace-reasoning">
-      {blocks.map((block, index) => (
-        block.kind === "truncation" ? (
-          <small className="turn-trace-reasoning-truncated" key={`${block.kind}-${index}`}>{block.text}</small>
-        ) : (
-          <p className="turn-trace-reasoning-paragraph" key={`${block.kind}-${index}`}>{block.text}</p>
-        )
-      ))}
-    </div>
   );
 }
 

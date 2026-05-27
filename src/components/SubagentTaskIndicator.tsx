@@ -18,21 +18,21 @@ export default function SubagentTaskIndicator({ tasks, onClick, expanded }: Suba
     <span
       className={`agent-meta-pill subagent-task-indicator${expanded ? " is-expanded" : ""}`}
       onClick={onClick}
-      title="子代理任务"
+      title={`子代理任务：${runningCount} 运行中，${completedCount} 完成，${failedCount} 失败`}
       style={{ cursor: "pointer" }}
     >
       <ListTodo size={12} />
       {runningCount > 0 ? (
         <>
           <span className="subagent-dot running" />
-          {runningCount} running
+          {runningCount} 运行中
         </>
       ) : failedCount > 0 ? (
-        <>{failedCount} failed</>
+        <>{failedCount} 失败</>
       ) : completedCount > 0 ? (
-        <>{completedCount} done</>
+        <>{completedCount} 完成</>
       ) : (
-        <>idle</>
+        <>空闲</>
       )}
     </span>
   );

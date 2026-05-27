@@ -56,7 +56,7 @@ export function thinkingTraceSectionForTurn({
     return finalizeSection({
       ...liveSection,
       status: turn ? mergeSectionStatus(liveSection.status, turn.status) : liveSection.status,
-      startedAt: liveSection.startedAt ?? turn?.startedAt,
+      startedAt: earliestTimestamp(liveSection.startedAt, turn?.startedAt, firstStartedAt([...progressNotes, ...toolCalls])),
       completedAt: liveSection.completedAt ?? turn?.completedAt,
       items: liveSection.items.length > 0 || persistedItems.length === 0
         ? liveSection.items
@@ -86,7 +86,7 @@ export function reduceThinkingTraceByTurn(
     return updateSection(current, event.turnId, event.createdAt, (section) => ({
       ...section,
       status: "running",
-      startedAt: numberValue(turn?.startedAt) ?? section.startedAt ?? event.createdAt,
+      startedAt: earliestTimestamp(section.startedAt, numberValue(turn?.startedAt), event.createdAt),
     }));
   }
 
@@ -464,6 +464,11 @@ function lastCompletedAt(items: Array<ToolCall | ProgressNote>) {
     .map((item) => item.completedAt)
     .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
   return values.length > 0 ? Math.max(...values) : undefined;
+}
+
+function earliestTimestamp(...values: Array<number | undefined>) {
+  const finiteValues = values.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  return finiteValues.length > 0 ? Math.min(...finiteValues) : undefined;
 }
 
 function parseJson(value: string) {

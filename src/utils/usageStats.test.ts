@@ -12,6 +12,7 @@ import {
   normalizeUsageTotals,
   parseClaudeCodeUsageLine,
   summarizeUsage,
+  turnTokenUsageFromRuntimeCheckpoint,
 } from "./usageStats";
 
 describe("usageStats", () => {
@@ -292,6 +293,73 @@ describe("usageStats", () => {
 
     expect(parsed.event).toBeUndefined();
     expect(parsed.error).toContain("JSON");
+  });
+
+  it("recovers the latest Any Jumper token usage from LangChain runtime checkpoints", () => {
+    const checkpoint = {
+      messages: [
+        {
+          id: ["langchain_core", "messages", "AIMessageChunk"],
+          kwargs: {
+            content: "first",
+            usage_metadata: {
+              input_tokens: 100,
+              output_tokens: 10,
+              total_tokens: 110,
+              input_token_details: { cache_read: 80 },
+            },
+          },
+        },
+        {
+          id: ["langchain_core", "messages", "AIMessageChunk"],
+          kwargs: {
+            content: "latest",
+            usage_metadata: {
+              input_tokens: 250,
+              output_tokens: 30,
+              total_tokens: 280,
+              input_token_details: { cache_creation: 20, cache_read: 200 },
+            },
+          },
+        },
+      ],
+    };
+
+    expect(turnTokenUsageFromRuntimeCheckpoint(JSON.stringify(checkpoint))).toEqual({
+      inputTokens: 250,
+      outputTokens: 30,
+      totalTokens: 280,
+      cacheCreation: 20,
+      cacheRead: 200,
+    });
+  });
+
+  it("falls back to OpenAI-compatible response metadata usage in runtime checkpoints", () => {
+    const checkpoint = {
+      messages: [
+        {
+          id: ["langchain_core", "messages", "AIMessage"],
+          kwargs: {
+            content: "done",
+            response_metadata: {
+              usage: {
+                prompt_tokens: 500,
+                completion_tokens: 40,
+                total_tokens: 540,
+                prompt_tokens_details: { cached_tokens: 320 },
+              },
+            },
+          },
+        },
+      ],
+    };
+
+    expect(turnTokenUsageFromRuntimeCheckpoint(JSON.stringify(checkpoint))).toEqual({
+      inputTokens: 500,
+      outputTokens: 40,
+      totalTokens: 540,
+      cacheRead: 320,
+    });
   });
 
   it("converts Codex cumulative token_count totals to stable deltas for idempotent sync", () => {

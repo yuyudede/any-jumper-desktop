@@ -40,15 +40,16 @@ describe("progress note persistence wiring", () => {
     expect(source).toContain("模型回复生成完成");
   });
 
-  it("captures provider-exposed reasoning without mixing it into assistant content", () => {
+  it("captures provider-exposed reasoning as intact Markdown without truncating it", () => {
     const source = readProjectFile("electron/main.ts");
 
     expect(source).toContain('import { extractModelOutputParts, stripExposedThinking } from "../src/utils/modelReasoning"');
-    expect(source).toContain('import { truncateTraceThoughtText');
     expect(source).toContain("recordModelReasoning(ctx");
     expect(source).toContain('kind === "reasoning"');
+    expect(source).toContain("content.trim()");
+    expect(source).toMatch(/kind === "reasoning"\s+\?\s+content\.trim\(\)/);
+    expect(source).not.toContain("truncateTraceThoughtText");
     expect(source).toContain("extractFinalOutputParts");
-    expect(source).toContain("truncateTraceThoughtText(content)");
   });
 
   it("requests visible reasoning summaries from capable model providers", () => {

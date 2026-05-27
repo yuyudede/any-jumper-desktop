@@ -14,15 +14,17 @@ describe("AgentPage subagent task tracking", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
     const handleAgentEventBlock = source.match(/function handleAgentEvent[\s\S]*?function toggleThinkingTrace/)?.[0] ?? "";
 
-    expect(source).toContain("reduceSubagentTasks");
-    expect(handleAgentEventBlock).toContain("setSubagentTasks((current) => reduceSubagentTasks(current, event));");
+    expect(source).toContain("reduceSubagentTasksByThreadId");
+    expect(handleAgentEventBlock).toContain("setSubagentTasksByThreadId((current) => reduceSubagentTasksByThreadId(current, event));");
+    expect(handleAgentEventBlock).toContain("if (event.threadId !== threadId) return;");
   });
 
-  it("clears live subagent task state when switching threads", () => {
+  it("keeps live subagent task state scoped by thread when switching threads", () => {
     const source = readProjectFile("src/pages/AgentPage.tsx");
 
-    expect(source).toContain("setSubagentTasks([]);");
-    expect(source).toContain("setTasksBarExpanded(false);");
+    expect(source).toContain("subagentTasksByThreadId");
+    expect(source).toContain("reduceSubagentTasksByThreadId");
+    expect(source).not.toContain("setSubagentTasks([]);");
     expect(source).toContain("}, [threadId]);");
   });
 });

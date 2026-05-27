@@ -17,4 +17,12 @@ describe("turn token usage persistence", () => {
     expect(source).toContain('storage.completeTurn(turn.id, "completed", turnTokenUsage)');
     expect(source).toContain("tokenUsage: jsonParse(row.token_usage_json, undefined)");
   });
+
+  it("recovers missing completed turn usage from runtime checkpoints", () => {
+    const source = readMainSource();
+
+    expect(source).toContain("backfillTurnTokenUsageFromCheckpoints()");
+    expect(source).toContain("JOIN runtime_checkpoints rc ON rc.turn_id=t.id");
+    expect(source).toContain("turnTokenUsageFromRuntimeCheckpoint(row.checkpoint_json)");
+  });
 });
