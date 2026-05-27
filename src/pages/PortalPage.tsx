@@ -22,6 +22,13 @@ import {
   DEFAULT_PORTAL_SHORTCUT,
   resolvePortalDefaults,
 } from "../utils/portalDefaults";
+import {
+  DEFAULT_SELECTION_ACTIONS,
+  DEFAULT_SELECTION_REASONING_EFFORT,
+  DEFAULT_SELECTION_SHORTCUT,
+  normalizeSelectionActions,
+} from "../utils/selectionActions";
+import PortalSelectionSettings from "./portal/PortalSelectionSettings";
 import PortalSessionManagement from "./portal/PortalSessionManagement";
 import PortalUsageManagement from "./portal/PortalUsageManagement";
 
@@ -64,8 +71,8 @@ interface PortalMainAppSettingsProps {
   onSave: () => void;
 }
 
-type PortalSubTab = "usage" | "sessions" | "quickAsk" | "mainApp";
-type ShortcutRecordingTarget = "quickAsk" | "mainApp";
+type PortalSubTab = "usage" | "sessions" | "selection" | "quickAsk" | "mainApp";
+type ShortcutRecordingTarget = "quickAsk" | "mainApp" | "selection";
 
 const portalSubTabs: Array<{
   id: PortalSubTab;
@@ -78,6 +85,10 @@ const portalSubTabs: Array<{
   {
     id: "sessions",
     label: "Sessions",
+  },
+  {
+    id: "selection",
+    label: "Selection",
   },
   {
     id: "quickAsk",
@@ -94,6 +105,9 @@ const defaultSettings: AppSettings = {
   mainWindowShortcut: DEFAULT_MAIN_WINDOW_SHORTCUT,
   portalShortcut: DEFAULT_PORTAL_SHORTCUT,
   portalReasoningEffort: DEFAULT_PORTAL_REASONING_EFFORT,
+  selectionShortcut: DEFAULT_SELECTION_SHORTCUT,
+  selectionReasoningEffort: DEFAULT_SELECTION_REASONING_EFFORT,
+  selectionActions: DEFAULT_SELECTION_ACTIONS,
 };
 
 const reasoningOptions = [
@@ -117,6 +131,10 @@ export default function PortalPage({ pushActivity }: PortalPageProps) {
   const selectedProvider = useMemo(
     () => models.find((model) => model.id === settingsDraft.portalDefaultProviderId),
     [models, settingsDraft.portalDefaultProviderId],
+  );
+  const selectionSelectedProvider = useMemo(
+    () => models.find((model) => model.id === settingsDraft.selectionDefaultProviderId),
+    [models, settingsDraft.selectionDefaultProviderId],
   );
   const providerOptions = useMemo(
     () => [
@@ -155,11 +173,11 @@ export default function PortalPage({ pushActivity }: PortalPageProps) {
 
       const shortcut = formatElectronShortcutFromEvent(event);
       if (!shortcut) return;
-      setSettingsDraft((draft) => (
-        recordingShortcutTarget === "quickAsk"
-          ? { ...draft, portalShortcut: shortcut }
-          : { ...draft, mainWindowShortcut: shortcut }
-      ));
+      setSettingsDraft((draft) => {
+        if (recordingShortcutTarget === "quickAsk") return { ...draft, portalShortcut: shortcut };
+        if (recordingShortcutTarget === "selection") return { ...draft, selectionShortcut: shortcut };
+        return { ...draft, mainWindowShortcut: shortcut };
+      });
       setRecordingShortcutTarget(undefined);
     }
 
@@ -203,6 +221,14 @@ export default function PortalPage({ pushActivity }: PortalPageProps) {
           ? settingsDraft.portalDefaultModel?.trim() || selectedProvider?.defaultModel
           : undefined,
         portalReasoningEffort: settingsDraft.portalReasoningEffort || DEFAULT_PORTAL_REASONING_EFFORT,
+        selectionShortcut: settingsDraft.selectionShortcut?.trim() || DEFAULT_SELECTION_SHORTCUT,
+        selectionDefaultWorkspaceId: settingsDraft.selectionDefaultWorkspaceId || undefined,
+        selectionDefaultProviderId: settingsDraft.selectionDefaultProviderId || undefined,
+        selectionDefaultModel: settingsDraft.selectionDefaultProviderId
+          ? settingsDraft.selectionDefaultModel?.trim() || selectionSelectedProvider?.defaultModel
+          : undefined,
+        selectionReasoningEffort: settingsDraft.selectionReasoningEffort || DEFAULT_SELECTION_REASONING_EFFORT,
+        selectionActions: normalizeSelectionActions(settingsDraft.selectionActions),
       };
       const shortcutRegistered = await desktopApi.saveSettings(nextSettings);
       setSettingsDraft(nextSettings);
@@ -260,6 +286,21 @@ export default function PortalPage({ pushActivity }: PortalPageProps) {
         <PortalUsageManagement workspaces={workspaces} pushActivity={pushActivity} />
       ) : portalSubTab === "sessions" ? (
         <PortalSessionManagement workspaces={workspaces} pushActivity={pushActivity} />
+      ) : portalSubTab === "selection" ? (
+        <PortalSelectionSettings
+          settingsDraft={settingsDraft}
+          models={models}
+          providerOptions={providerOptions}
+          selectedProvider={selectionSelectedProvider}
+          loading={loading}
+          saving={saving}
+          recordingShortcut={recordingShortcutTarget === "selection"}
+          onToggleShortcutRecording={() => setRecordingShortcutTarget(
+            recordingShortcutTarget === "selection" ? undefined : "selection",
+          )}
+          setSettingsDraft={setSettingsDraft}
+          onSave={() => void savePortalSettings()}
+        />
       ) : portalSubTab === "quickAsk" ? (
         <PortalQuickAskSettings
           settingsDraft={settingsDraft}
