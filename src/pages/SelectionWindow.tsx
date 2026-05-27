@@ -42,13 +42,18 @@ export default function SelectionWindow() {
 
   useEffect(() => {
     void loadData();
-    let unsubscribe: (() => void) | undefined;
-    void Promise.resolve()
-      .then(() => desktopApi.onSelectionEvent(handleSelectionEvent))
-      .then((next) => {
-        unsubscribe = next;
+    let selectionSubscriptionDisposed = false;
+    let unsubscribeSelection: (() => void) | undefined;
+    void desktopApi.onSelectionEvent(handleSelectionEvent)
+      .then((nextUnsubscribe) => {
+        if (selectionSubscriptionDisposed) {
+          nextUnsubscribe();
+          return;
+        }
+        unsubscribeSelection = nextUnsubscribe;
       })
       .catch((eventError) => {
+        if (selectionSubscriptionDisposed) return;
         setError(errorMessage(eventError));
       });
 
@@ -57,7 +62,8 @@ export default function SelectionWindow() {
     media?.addEventListener?.("change", handleMotionChange);
 
     return () => {
-      unsubscribe?.();
+      selectionSubscriptionDisposed = true;
+      unsubscribeSelection?.();
       media?.removeEventListener?.("change", handleMotionChange);
     };
   }, []);

@@ -21,6 +21,8 @@ describe("SelectionWindow layout", () => {
     expect(source).toContain("selection-result-panel");
     expect(source).toContain("selectionRunAction");
     expect(source).toContain("onSelectionEvent");
+    expect(source).toContain("let selectionSubscriptionDisposed = false");
+    expect(source).toContain("nextUnsubscribe()");
     expect(source).toContain("wheel");
     expect(source).toContain("ArrowRight");
     expect(source).toContain("ArrowLeft");
