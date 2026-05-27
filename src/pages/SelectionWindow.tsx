@@ -35,6 +35,7 @@ export default function SelectionWindow() {
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const runIdRef = useRef<string>();
   const actionsRef = useRef<HTMLDivElement | null>(null);
+  const actionButtonRefs = useRef(new Map<string, HTMLButtonElement>());
 
   const defaults = useMemo(() => resolveSelectionDefaults(settings, models), [models, settings]);
   const actions = useMemo(() => enabledSelectionActions(defaults.actions), [defaults.actions]);
@@ -71,6 +72,16 @@ export default function SelectionWindow() {
   useEffect(() => {
     setActiveIndex((index) => Math.min(index, Math.max(actions.length - 1, 0)));
   }, [actions.length]);
+
+  useEffect(() => {
+    const active = actions[activeIndex];
+    if (!active) return;
+    actionButtonRefs.current.get(active.id)?.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+      behavior: reducedMotion ? "auto" : "smooth",
+    });
+  }, [actions, activeIndex, phase, reducedMotion]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -139,6 +150,11 @@ export default function SelectionWindow() {
     actionsRef.current.scrollLeft += event.deltaY;
   }
 
+  function setActionButtonRef(actionId: string, node: HTMLButtonElement | null) {
+    if (node) actionButtonRefs.current.set(actionId, node);
+    else actionButtonRefs.current.delete(actionId);
+  }
+
   async function runAction(action: SelectionAction) {
     const input = selectedText.trim();
     setActiveActionId(action.id);
@@ -195,6 +211,7 @@ export default function SelectionWindow() {
                 type="button"
                 className={`selection-action-chip ${index === activeIndex ? "is-active" : ""}`}
                 key={action.id}
+                ref={(node) => setActionButtonRef(action.id, node)}
                 onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => void runAction(action)}
               >
@@ -220,6 +237,7 @@ export default function SelectionWindow() {
                   type="button"
                   className={`selection-action-chip ${action.id === activeAction?.id ? "is-active" : ""}`}
                   key={action.id}
+                  ref={(node) => setActionButtonRef(action.id, node)}
                   onMouseEnter={() => setActiveIndex(index)}
                   onClick={() => void runAction(action)}
                 >

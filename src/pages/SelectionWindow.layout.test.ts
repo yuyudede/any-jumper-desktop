@@ -23,6 +23,8 @@ describe("SelectionWindow layout", () => {
     expect(source).toContain("onSelectionEvent");
     expect(source).toContain("let selectionSubscriptionDisposed = false");
     expect(source).toContain("nextUnsubscribe()");
+    expect(source).toContain("actionButtonRefs");
+    expect(source).toContain("scrollIntoView");
     expect(source).toContain("wheel");
     expect(source).toContain("ArrowRight");
     expect(source).toContain("ArrowLeft");
@@ -33,7 +35,10 @@ describe("SelectionWindow layout", () => {
     expect(css).toContain(".selection-result-panel");
     expect(css).toContain("selection-panel-open");
     expect(css).toContain("selection-bar-in");
-    expect(css).toContain("saturate(1.8)");
+    expect(css).toContain("repeating-linear-gradient");
+    expect(css).toContain("-webkit-app-region: drag");
+    expect(css).toContain("-webkit-app-region: no-drag");
+    expect(css).toContain("saturate(1.35)");
     expect(css).toContain("color-mix");
   });
 });

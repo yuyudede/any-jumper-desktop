@@ -30,6 +30,13 @@ describe("Selection shortcut wiring", () => {
     expect(source).toContain("clipboard.writeText(sentinel)");
     expect(source).toContain("copySelectedTextOnDarwin");
     expect(source).toContain("captureError");
+    expect(source).toContain("positionSelectionWindowNearCursor");
+    expect(source).toContain("screen.getCursorScreenPoint");
+    expect(source).toContain("win.setBounds");
+    expect(source).toContain("selectionWindowOpenToken");
+    expect(source).toContain("await loadSelectionWindow");
+    expect(source).toContain("win.showInactive()");
+    expect(source).not.toContain("win.show();\n  win.moveTop();\n  win.focus();");
     expect(source).toContain("globalShortcut.register(shortcut");
     expect(source).toContain("selection-event");
     expect(preload).toContain("onSelectionEvent");

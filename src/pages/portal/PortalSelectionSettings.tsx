@@ -155,7 +155,7 @@ export default function PortalSelectionSettings({
           {actions.map((action, index) => {
             const warning = selectionTemplateWarning(action.promptTemplate);
             return (
-              <div className="selection-action-editor" key={action.id}>
+              <div className="selection-action-editor selection-action-card" key={action.id}>
                 <div className="selection-action-editor-head">
                   <GripVertical size={14} />
                   <Badge tone={action.enabled ? "success" : "muted"}>{action.enabled ? "启用" : "停用"}</Badge>

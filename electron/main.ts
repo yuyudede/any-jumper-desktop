@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, safeStorage, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, safeStorage, screen, shell } from "electron";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
@@ -115,6 +115,7 @@ let terminalManager: TerminalManager;
 let agentBridge: AgentBridgeService;
 let portalWindow: BrowserWindow | undefined;
 let selectionWindow: BrowserWindow | undefined;
+let selectionWindowOpenToken = 0;
 let portalWindowPinned = true;
 let activatingPortalWindow = false;
 let registeredMainWindowShortcut: string | undefined;
@@ -4153,13 +4154,32 @@ function loadSelectionWindow(win: BrowserWindow, selectedText = "", captureError
   if (selectedText) query.set("text", selectedText);
   if (captureError) query.set("captureError", captureError);
   if (process.env.VITE_DEV_SERVER_URL || !app.isPackaged) {
-    void win.loadURL(`${DEV_URL}?${query}`);
-  } else {
-    void win.loadFile(path.join(mainDir, "../dist/index.html"), { query: Object.fromEntries(query) });
+    return win.loadURL(`${DEV_URL}?${query}`);
   }
+  return win.loadFile(path.join(mainDir, "../dist/index.html"), { query: Object.fromEntries(query) });
 }
 
-function createSelectionWindow(selectedText = "", captureError?: string) {
+function clampSelectionWindowValue(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(value, Math.max(min, max)));
+}
+
+function positionSelectionWindowNearCursor(win: BrowserWindow) {
+  const cursor = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(cursor);
+  const workArea = display.workArea;
+  const bounds = win.getBounds();
+  const padding = 10;
+  const targetX = Math.round(cursor.x - bounds.width / 2);
+  const targetY = Math.round(cursor.y + 18 - bounds.height / 2);
+  win.setBounds({
+    x: clampSelectionWindowValue(targetX, workArea.x + padding, workArea.x + workArea.width - bounds.width - padding),
+    y: clampSelectionWindowValue(targetY, workArea.y + padding, workArea.y + workArea.height - bounds.height - padding),
+    width: bounds.width,
+    height: bounds.height,
+  }, false);
+}
+
+function createSelectionWindow() {
   if (selectionWindow && !selectionWindow.isDestroyed()) return selectionWindow;
   const win = new BrowserWindow({
     width: 420,
@@ -4194,28 +4214,29 @@ function createSelectionWindow(selectedText = "", captureError?: string) {
     if (selectionWindow === win) selectionWindow = undefined;
   });
 
-  loadSelectionWindow(win, selectedText, captureError);
   return win;
 }
 
 async function showSelectionWindow() {
+  const openToken = ++selectionWindowOpenToken;
+  const previouslyOpen = selectionWindow && !selectionWindow.isDestroyed() ? selectionWindow : undefined;
+  if (previouslyOpen?.isVisible()) previouslyOpen.hide();
   const capture = await readSelectedText().catch((error): SelectedTextCapture => ({
     text: "",
     error: selectionCaptureErrorMessage(error),
   }));
-  const existing = selectionWindow && !selectionWindow.isDestroyed() ? selectionWindow : undefined;
-  const win = existing ?? createSelectionWindow(capture.text, capture.error);
-  if (existing) loadSelectionWindow(existing, capture.text, capture.error);
-  win.center();
+  const win = selectionWindow && !selectionWindow.isDestroyed() ? selectionWindow : createSelectionWindow();
+  await loadSelectionWindow(win, capture.text, capture.error);
+  if (openToken !== selectionWindowOpenToken || win.isDestroyed()) return;
+  positionSelectionWindowNearCursor(win);
   if (process.platform === "darwin") {
     win.setAlwaysOnTop(true, "screen-saver");
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   } else {
     win.setAlwaysOnTop(true);
   }
-  win.show();
+  win.showInactive();
   win.moveTop();
-  win.focus();
 }
 
 function hideSelectionWindow() {

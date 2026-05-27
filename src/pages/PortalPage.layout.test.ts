@@ -45,7 +45,12 @@ describe("PortalPage settings layout", () => {
     expect(source).toContain("PortalUsageManagement");
     expect(source).toContain("PortalSessionManagement");
     expect(source).toContain("PortalSelectionSettings");
-    expect(readProjectFile("src/styles/theme.css")).toContain(".selection-action-editor");
+    const css = readProjectFile("src/styles/theme.css");
+    const selectionSettings = readProjectFile("src/pages/portal/PortalSelectionSettings.tsx");
+    expect(css).toContain(".selection-action-editor");
+    expect(css).toContain(".selection-action-card");
+    expect(css).toContain("grid-template-columns: repeat(auto-fit, minmax(260px, 1fr))");
+    expect(selectionSettings).toContain("selection-action-card");
     const usagePage = readProjectFile("src/pages/portal/PortalUsageManagement.tsx");
     expect(usagePage).toContain("const totalTokenValue = data.summary.realTotalTokens;");
     expect(usagePage).not.toContain("const requestTokenTotal = data.summary.inputTokens + data.summary.outputTokens;");
