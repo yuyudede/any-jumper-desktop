@@ -33,6 +33,12 @@ export interface AppSettings {
   portalDefaultProviderId?: string;
   portalDefaultModel?: string;
   portalReasoningEffort?: string;
+  selectionShortcut?: string;
+  selectionDefaultWorkspaceId?: string;
+  selectionDefaultProviderId?: string;
+  selectionDefaultModel?: string;
+  selectionReasoningEffort?: string;
+  selectionActions?: SelectionAction[];
 }
 
 export interface ProjectContext {
@@ -70,6 +76,43 @@ export interface ResultAction {
   label: string;
   icon?: ReactNode;
   onClick: () => void;
+}
+
+export interface SelectionAction {
+  id: string;
+  label: string;
+  description: string;
+  promptTemplate: string;
+  enabled: boolean;
+  order: number;
+}
+
+export interface SelectionDefaults {
+  shortcut: string;
+  providerId?: string;
+  model?: string;
+  reasoningEffort: string;
+  actions: SelectionAction[];
+}
+
+export interface SelectionRunRequest {
+  actionId: string;
+  selectedText: string;
+  providerId?: string;
+  model?: string;
+  reasoningEffort?: string;
+}
+
+export interface SelectionRunResult {
+  runId: string;
+  status: "started";
+}
+
+export interface SelectionEvent {
+  runId: string;
+  event: "selection.started" | "selection.delta" | "selection.completed" | "selection.failed";
+  payload?: unknown;
+  createdAt: number;
 }
 
 export type PermissionMode = "readOnly" | "workspaceWrite" | "fullAccess";
