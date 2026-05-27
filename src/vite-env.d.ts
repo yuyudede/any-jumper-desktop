@@ -5,6 +5,7 @@ interface Window {
     invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
     onAgentEvent(handler: (event: unknown) => void): () => void;
     onAgentBridgeEvent?: (handler: (event: unknown) => void) => () => void;
+    onSelectionEvent?: (handler: (event: unknown) => void) => () => void;
     pickDirectory(): Promise<string | null>;
     pickFiles?: () => Promise<string[]>;
     terminalInvoke(command: string, args?: Record<string, unknown>): Promise<unknown>;

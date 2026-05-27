@@ -14,6 +14,11 @@ contextBridge.exposeInMainWorld("anyJumper", {
     ipcRenderer.on("agent-bridge-event", listener);
     return () => ipcRenderer.off("agent-bridge-event", listener);
   },
+  onSelectionEvent(handler: (event: unknown) => void) {
+    const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => handler(payload);
+    ipcRenderer.on("selection-event", listener);
+    return () => ipcRenderer.off("selection-event", listener);
+  },
   pickDirectory() {
     return ipcRenderer.invoke("any-jumper:pick-directory");
   },

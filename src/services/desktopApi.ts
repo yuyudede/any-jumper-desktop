@@ -15,6 +15,9 @@ import type {
   ModelConfigRequest,
   PluginSummary,
   ProjectContext,
+  SelectionEvent,
+  SelectionRunRequest,
+  SelectionRunResult,
   SkillSummary,
   ThreadCreateRequest,
   ThreadArchiveFilter,
@@ -236,6 +239,25 @@ export const desktopApi = {
     return api.portalInvoke
       ? api.portalInvoke<void>("portal_open_chat", { workspaceId, threadId })
       : invoke<void>("portal_open_chat", { workspaceId, threadId });
+  },
+  selectionShortcutReregister() {
+    return invoke<boolean>("selection_shortcut_reregister");
+  },
+  selectionShow() {
+    return invoke<void>("selection_window_show");
+  },
+  selectionHide() {
+    const api = bridge();
+    return api.portalInvoke ? api.portalInvoke<void>("selection_window_hide") : invoke<void>("selection_window_hide");
+  },
+  selectionRunAction(request: SelectionRunRequest) {
+    return invoke<SelectionRunResult>("selection_run_action", { request });
+  },
+  onSelectionEvent(handler: (event: SelectionEvent) => void) {
+    const api = bridge();
+    if (!api.onSelectionEvent) return Promise.resolve(() => undefined);
+    const unsubscribe = api.onSelectionEvent((event) => handler(event as SelectionEvent));
+    return Promise.resolve(unsubscribe);
   },
   usageDashboard(request: UsageDashboardRequest = {}) {
     return invoke<UsageDashboardData>("usage_dashboard", { request });

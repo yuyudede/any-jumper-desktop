@@ -39,4 +39,18 @@ describe("desktopApi error helpers", () => {
     expect(source).not.toContain("codex_model_sync_save");
     expect(source).not.toContain("codex_model_sync_validate");
   });
+
+  it("exposes renderer APIs for Selection actions", () => {
+    const source = readDesktopApiSource();
+
+    expect(source).toContain("selectionShortcutReregister()");
+    expect(source).toContain('invoke<boolean>("selection_shortcut_reregister"');
+    expect(source).toContain("selectionShow()");
+    expect(source).toContain('invoke<void>("selection_window_show"');
+    expect(source).toContain("selectionHide()");
+    expect(source).toContain('invoke<void>("selection_window_hide"');
+    expect(source).toContain("selectionRunAction(request");
+    expect(source).toContain('invoke<SelectionRunResult>("selection_run_action"');
+    expect(source).toContain("onSelectionEvent(handler");
+  });
 });
