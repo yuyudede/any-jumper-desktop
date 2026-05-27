@@ -25,3 +25,24 @@ Users/
 
 # Sensitive files
 auth.json
+
+# Temporary research files (specific to previous research tasks)
+/*.py
+/*.html
+/*.md
+!README.md
+!index.html
+香港开户研究/
+香港开户全量分析.html
+香港开户全量分析_含图片画廊.html
+香港开户图片画廊.html
+香港开户统计分析.html
+渴望猫粮分类和区别.md
+electron_analysis_report.md
+poem.txt
+tmp/
+home/
+images/
+all_images.json
+results_part1.json
+xiaohongshu_results.json
