@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, safeStorage, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, safeStorage, shell } from "electron";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
@@ -34,6 +34,7 @@ import type {
   ProgressNote,
   ProjectContext,
   QueuedInput,
+  SelectionEvent,
   SkillSummary,
   ThreadCreateRequest,
   ThreadDetail,
@@ -68,6 +69,7 @@ import {
 import { AgentBridgeService } from "./agentBridge";
 import { enableDeepSeekReasoningRoundTrip } from "../src/utils/deepseekReasoningRoundTrip";
 import { DEFAULT_MAIN_WINDOW_SHORTCUT, DEFAULT_PORTAL_SHORTCUT } from "../src/utils/portalDefaults";
+import { DEFAULT_SELECTION_SHORTCUT } from "../src/utils/selectionActions";
 import {
   classifyToolKind,
   createToolSummary,
@@ -108,10 +110,12 @@ let appRuntime: AgentRuntimeService;
 let terminalManager: TerminalManager;
 let agentBridge: AgentBridgeService;
 let portalWindow: BrowserWindow | undefined;
+let selectionWindow: BrowserWindow | undefined;
 let portalWindowPinned = true;
 let activatingPortalWindow = false;
 let registeredMainWindowShortcut: string | undefined;
 let registeredPortalShortcut: string | undefined;
+let registeredSelectionShortcut: string | undefined;
 const windows = new Set<BrowserWindow>();
 const mainWindows = new Set<BrowserWindow>();
 
@@ -324,8 +328,19 @@ function emitAgentBridgeEvent(payload: unknown) {
   }
 }
 
+function emitSelectionEvent(event: Omit<SelectionEvent, "createdAt">) {
+  const payload: SelectionEvent = { ...event, createdAt: nowMillis() };
+  for (const win of windows) {
+    if (!win.isDestroyed()) win.webContents.send("selection-event", payload);
+  }
+}
+
 function portalShortcut() {
   return settings?.get().portalShortcut?.trim() || DEFAULT_PORTAL_SHORTCUT;
+}
+
+function selectionShortcut() {
+  return settings?.get().selectionShortcut?.trim() || DEFAULT_SELECTION_SHORTCUT;
 }
 
 function mainWindowShortcut() {
@@ -370,10 +385,30 @@ function registerMainWindowShortcut() {
   return ok;
 }
 
+function registerSelectionShortcut() {
+  if (registeredSelectionShortcut) {
+    globalShortcut.unregister(registeredSelectionShortcut);
+    registeredSelectionShortcut = undefined;
+  }
+  const shortcut = selectionShortcut();
+  if (!shortcut) return true;
+  let ok = false;
+  try {
+    ok = globalShortcut.register(shortcut, () => {
+      void showSelectionWindow();
+    });
+  } catch {
+    ok = false;
+  }
+  if (ok) registeredSelectionShortcut = shortcut;
+  return ok;
+}
+
 function registerGlobalShortcuts() {
   const portalRegistered = registerPortalShortcut();
   const mainWindowRegistered = registerMainWindowShortcut();
-  return portalRegistered && mainWindowRegistered;
+  const selectionRegistered = registerSelectionShortcut();
+  return portalRegistered && mainWindowRegistered && selectionRegistered;
 }
 
 class StorageService {
@@ -3691,6 +3726,21 @@ function resizeCurrentWindowByWidthDelta(event: Electron.IpcMainInvokeEvent, del
   win.setSize(Math.max(minWidth, width + Math.round(delta)), height, false);
 }
 
+async function readSelectedText() {
+  const previousText = clipboard.readText();
+  try {
+    if (process.platform === "darwin") {
+      const script = 'tell application "System Events" to keystroke "c" using command down';
+      spawnSync("osascript", ["-e", script], { encoding: "utf8", timeout: 1200 });
+      await new Promise((resolve) => setTimeout(resolve, 90));
+    }
+    const selected = clipboard.readText();
+    return selected.trim() && selected !== previousText ? selected : selected.trim();
+  } finally {
+    setTimeout(() => clipboard.writeText(previousText), 120);
+  }
+}
+
 function registerIpcHandlers() {
   ipcMain.handle("any-jumper:pick-directory", async (event) => {
     const owner = BrowserWindow.fromWebContents(event.sender);
@@ -3801,6 +3851,9 @@ function registerIpcHandlers() {
         case "portal_window_hide": return hidePortalWindow();
         case "portal_window_set_always_on_top": return setPortalWindowAlwaysOnTop(Boolean(args.pinned));
         case "portal_open_chat": return createWindow(args.workspaceId, args.threadId);
+        case "selection_shortcut_reregister": return registerSelectionShortcut();
+        case "selection_window_show": return showSelectionWindow();
+        case "selection_window_hide": return hideSelectionWindow();
         case "usage_dashboard": return storage.usageDashboard(args.request);
         case "usage_sync_external": return storage.syncExternalUsage();
         case "open_external_url": return openExternalUrl(args.url);
@@ -3984,6 +4037,77 @@ function setPortalWindowAlwaysOnTop(pinned: boolean) {
     applyPortalWindowPin(portalWindow, pinned);
   }
   return pinned;
+}
+
+function loadSelectionWindow(win: BrowserWindow, selectedText = "") {
+  const query = new URLSearchParams();
+  query.set("selection", "window");
+  if (selectedText) query.set("text", selectedText);
+  if (process.env.VITE_DEV_SERVER_URL || !app.isPackaged) {
+    void win.loadURL(`${DEV_URL}?${query}`);
+  } else {
+    void win.loadFile(path.join(mainDir, "../dist/index.html"), { query: Object.fromEntries(query) });
+  }
+}
+
+function createSelectionWindow(selectedText = "") {
+  if (selectionWindow && !selectionWindow.isDestroyed()) return selectionWindow;
+  const win = new BrowserWindow({
+    width: 420,
+    height: 260,
+    minWidth: 320,
+    minHeight: 80,
+    title: "Any Jumper Selection",
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    hasShadow: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    movable: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(mainDir, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+  selectionWindow = win;
+  windows.add(win);
+  attachExternalLinkHandlers(win);
+  win.on("blur", () => {
+    if (!win.isDestroyed()) win.hide();
+  });
+  win.on("closed", () => {
+    windows.delete(win);
+    if (selectionWindow === win) selectionWindow = undefined;
+  });
+
+  loadSelectionWindow(win, selectedText);
+  return win;
+}
+
+async function showSelectionWindow() {
+  const selectedText = await readSelectedText().catch(() => "");
+  const existing = selectionWindow && !selectionWindow.isDestroyed() ? selectionWindow : undefined;
+  const win = existing ?? createSelectionWindow(selectedText);
+  if (existing) loadSelectionWindow(existing, selectedText);
+  win.center();
+  if (process.platform === "darwin") {
+    win.setAlwaysOnTop(true, "screen-saver");
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  } else {
+    win.setAlwaysOnTop(true);
+  }
+  win.show();
+  win.moveTop();
+  win.focus();
+}
+
+function hideSelectionWindow() {
+  if (selectionWindow && !selectionWindow.isDestroyed()) selectionWindow.hide();
 }
 
 function findMainWindow() {
