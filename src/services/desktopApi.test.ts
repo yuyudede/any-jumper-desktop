@@ -49,6 +49,9 @@ describe("desktopApi error helpers", () => {
     expect(source).toContain('invoke<void>("selection_window_show"');
     expect(source).toContain("selectionHide()");
     expect(source).toContain('invoke<void>("selection_window_hide"');
+    expect(source).toContain("selectionSetWindowLayout");
+    expect(source).toContain('"actions" | "result" | "expanded" | "source"');
+    expect(source).toContain('invoke<void>("selection_window_layout"');
     expect(source).toContain("selectionRunAction(request");
     expect(source).toContain('invoke<SelectionRunResult>("selection_run_action"');
     expect(source).toContain("onSelectionEvent(handler");

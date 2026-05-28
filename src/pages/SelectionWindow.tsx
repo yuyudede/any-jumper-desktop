@@ -36,10 +36,29 @@ export default function SelectionWindow() {
   const runIdRef = useRef<string>();
   const actionsRef = useRef<HTMLDivElement | null>(null);
   const actionButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const selectionControlHandlerRef = useRef<(action: string) => void>(() => undefined);
 
   const defaults = useMemo(() => resolveSelectionDefaults(settings, models), [models, settings]);
   const actions = useMemo(() => enabledSelectionActions(defaults.actions), [defaults.actions]);
   const activeAction = actions.find((action) => action.id === activeActionId) || actions[activeIndex] || actions[0];
+
+  selectionControlHandlerRef.current = (action) => {
+    if (action === "close") {
+      void desktopApi.selectionHide();
+      return;
+    }
+    if (action === "previous") {
+      setActiveIndex((index) => Math.max(index - 1, 0));
+      return;
+    }
+    if (action === "next") {
+      setActiveIndex((index) => Math.min(index + 1, Math.max(actions.length - 1, 0)));
+      return;
+    }
+    if (action === "run" && activeAction) {
+      void runAction(activeAction);
+    }
+  };
 
   useEffect(() => {
     void loadData();
@@ -84,17 +103,21 @@ export default function SelectionWindow() {
   }, [actions, activeIndex, phase, reducedMotion]);
 
   useEffect(() => {
+    const layout = phase === "actions" ? "actions" : sourceOpen ? "source" : expanded ? "expanded" : "result";
+    void desktopApi.selectionSetWindowLayout(layout).catch(() => undefined);
+  }, [expanded, phase, sourceOpen]);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        if (expanded) setExpanded(false);
-        else void desktopApi.selectionHide();
+        void desktopApi.selectionHide();
         return;
       }
       if (phase !== "actions") return;
       if (event.key === "ArrowRight") {
         event.preventDefault();
-        setActiveIndex((index) => Math.min(index + 1, actions.length - 1));
+        setActiveIndex((index) => Math.min(index + 1, Math.max(actions.length - 1, 0)));
       }
       if (event.key === "ArrowLeft") {
         event.preventDefault();
@@ -124,6 +147,11 @@ export default function SelectionWindow() {
   }
 
   function handleSelectionEvent(event: SelectionEvent) {
+    if (event.event === "selection.control") {
+      const action = (event.payload as { action?: string })?.action || "";
+      selectionControlHandlerRef.current(action);
+      return;
+    }
     if (event.runId !== runIdRef.current) return;
     if (event.event === "selection.started") {
       setRunStatus("running");
@@ -200,6 +228,7 @@ export default function SelectionWindow() {
         "selection-window-root",
         phase === "result" ? "is-result" : "is-actions",
         expanded ? "is-expanded" : "",
+        sourceOpen ? "is-source-open" : "",
         reducedMotion ? "prefers-reduced-motion" : "",
       ].filter(Boolean).join(" ")}
     >
@@ -257,7 +286,7 @@ export default function SelectionWindow() {
               ) : error ? (
                 <p className="selection-error">{error}</p>
               ) : (
-                <MarkdownRenderer content={result || "等待结果..."} streaming={runStatus === "running"} />
+                <MarkdownRenderer content={result || "等待结果..."} streaming={runStatus === "running"} progressive />
               )}
             </div>
             {sourceOpen ? (

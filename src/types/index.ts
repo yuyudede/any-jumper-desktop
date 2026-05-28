@@ -110,7 +110,7 @@ export interface SelectionRunResult {
 
 export interface SelectionEvent {
   runId: string;
-  event: "selection.started" | "selection.delta" | "selection.completed" | "selection.failed";
+  event: "selection.started" | "selection.delta" | "selection.completed" | "selection.failed" | "selection.control";
   payload?: unknown;
   createdAt: number;
 }

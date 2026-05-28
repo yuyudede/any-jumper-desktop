@@ -1,5 +1,5 @@
-import { AlertTriangle, GripVertical, RadioTower, RotateCcw, Save, XCircle } from "lucide-react";
-import { useMemo, type Dispatch, type SetStateAction } from "react";
+import { AlertTriangle, ChevronDown, ChevronUp, GripVertical, Plus, RadioTower, RotateCcw, Save, XCircle } from "lucide-react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -37,6 +37,23 @@ const reasoningOptions = [
   { label: "XHigh", value: "xhigh" },
 ];
 
+function compactPromptPreview(value: string) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= 96) return normalized;
+  return `${normalized.slice(0, 96)}...`;
+}
+
+function nextCustomActionId(actions: Array<{ id: string }>) {
+  const ids = new Set(actions.map((action) => action.id));
+  let index = actions.length + 1;
+  let id = `selection-custom-${index}`;
+  while (ids.has(id)) {
+    index += 1;
+    id = `selection-custom-${index}`;
+  }
+  return id;
+}
+
 export default function PortalSelectionSettings({
   settingsDraft,
   models,
@@ -49,16 +66,47 @@ export default function PortalSelectionSettings({
   setSettingsDraft,
   onSave,
 }: PortalSelectionSettingsProps) {
+  const [selectedActionId, setSelectedActionId] = useState("");
   const actions = useMemo(
     () => normalizeSelectionActions(settingsDraft.selectionActions),
     [settingsDraft.selectionActions],
   );
+  const selectedAction = actions.find((action) => action.id === selectedActionId) || actions[0];
+
+  useEffect(() => {
+    if (!actions.length) {
+      if (selectedActionId) setSelectedActionId("");
+      return;
+    }
+    if (!actions.some((action) => action.id === selectedActionId)) {
+      setSelectedActionId(actions[0].id);
+    }
+  }, [actions, selectedActionId]);
 
   function updateAction(id: string, update: Partial<(typeof actions)[number]>) {
     setSettingsDraft((draft) => ({
       ...draft,
       selectionActions: actions.map((action) => action.id === id ? { ...action, ...update } : action),
     }));
+  }
+
+  function addAction() {
+    const id = nextCustomActionId(actions);
+    setSettingsDraft((draft) => ({
+      ...draft,
+      selectionActions: [
+        ...actions,
+        {
+          id,
+          label: "新建",
+          description: "自定义动作",
+          promptTemplate: "请处理下面这段内容：\n\n{{selection}}",
+          enabled: true,
+          order: actions.length + 1,
+        },
+      ],
+    }));
+    setSelectedActionId(id);
   }
 
   function moveAction(id: string, direction: -1 | 1) {
@@ -152,41 +200,143 @@ export default function PortalSelectionSettings({
 
       <WorkbenchSection title="动作模板" description="短名建议使用两个汉字。Prompt 模板使用 {{selection}} 插入选中文字。">
         <div className="selection-action-list">
-          {actions.map((action, index) => {
-            const warning = selectionTemplateWarning(action.promptTemplate);
-            return (
-              <div className="selection-action-editor selection-action-card" key={action.id}>
-                <div className="selection-action-editor-head">
-                  <GripVertical size={14} />
-                  <Badge tone={action.enabled ? "success" : "muted"}>{action.enabled ? "启用" : "停用"}</Badge>
-                  {warning ? <Badge tone="warning"><AlertTriangle size={12} /> 模板提示</Badge> : null}
-                  <div className="selection-action-order">
-                    <Button type="button" variant="outline" size="sm" disabled={index === 0} onClick={() => moveAction(action.id, -1)}>上移</Button>
-                    <Button type="button" variant="outline" size="sm" disabled={index === actions.length - 1} onClick={() => moveAction(action.id, 1)}>下移</Button>
-                  </div>
+          <div className="selection-template-toolbar">
+            <div>
+              <strong>动作列表</strong>
+              <span>点击一行动作后，在下方编辑内容。</span>
+            </div>
+            <Button type="button" variant="outline" disabled={loading} onClick={addAction}>
+              <Plus size={15} /> 新增动作
+            </Button>
+          </div>
+          <div className="selection-template-table" role="table" aria-label="Selection 动作模板">
+            <div className="selection-template-table-head" role="row">
+              <span className="selection-template-cell" />
+              <span className="selection-template-cell">状态</span>
+              <span className="selection-template-cell">短名</span>
+              <span className="selection-template-cell">描述</span>
+              <span className="selection-template-cell">Prompt 预览</span>
+              <span className="selection-template-cell">显示</span>
+              <span className="selection-template-cell">排序</span>
+            </div>
+            {actions.map((action, index) => {
+              const warning = selectionTemplateWarning(action.promptTemplate);
+              const isSelected = action.id === selectedAction?.id;
+              return (
+                <div
+                  className={`selection-template-row ${isSelected ? "is-selected" : ""}`}
+                  key={action.id}
+                  role="row"
+                  tabIndex={0}
+                  onClick={() => setSelectedActionId(action.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedActionId(action.id);
+                    }
+                  }}
+                >
+                  <span className="selection-template-cell selection-template-grip"><GripVertical size={14} /></span>
+                  <span className="selection-template-cell">
+                    <Badge tone={action.enabled ? "success" : "muted"}>{action.enabled ? "启用" : "停用"}</Badge>
+                  </span>
+                  <span className="selection-template-cell selection-template-name">{action.label}</span>
+                  <span className="selection-template-cell selection-template-description">{action.description}</span>
+                  <span className="selection-template-cell selection-template-preview">
+                    {warning ? <AlertTriangle size={13} /> : null}
+                    <span>{compactPromptPreview(action.promptTemplate)}</span>
+                  </span>
+                  <span className="selection-template-cell selection-template-visible">
+                    <input
+                      type="checkbox"
+                      checked={action.enabled}
+                      aria-label={`${action.label} 是否显示在 Selection 动作条中`}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={(event) => updateAction(action.id, { enabled: event.target.checked })}
+                    />
+                  </span>
+                  <span className="selection-template-cell selection-template-order">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      disabled={index === 0}
+                      aria-label={`${action.label} 上移`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        moveAction(action.id, -1);
+                      }}
+                    >
+                      <ChevronUp size={15} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      disabled={index === actions.length - 1}
+                      aria-label={`${action.label} 下移`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        moveAction(action.id, 1);
+                      }}
+                    >
+                      <ChevronDown size={15} />
+                    </Button>
+                  </span>
                 </div>
-                <div className="two-col">
-                  <label className="field-stack">
-                    <span>短名</span>
-                    <Input value={action.label} maxLength={4} onChange={(event) => updateAction(action.id, { label: event.target.value })} />
-                  </label>
-                  <label className="field-stack">
-                    <span>描述</span>
-                    <Input value={action.description} onChange={(event) => updateAction(action.id, { description: event.target.value })} />
-                  </label>
+              );
+            })}
+          </div>
+
+          {selectedAction ? (
+            <div className="selection-template-edit-panel">
+              <div className="selection-template-edit-head">
+                <div>
+                  <span>正在编辑</span>
+                  <strong>{selectedAction.label}</strong>
                 </div>
+                <Badge tone={selectedAction.enabled ? "success" : "muted"}>{selectedAction.enabled ? "启用" : "停用"}</Badge>
+                {selectionTemplateWarning(selectedAction.promptTemplate) ? (
+                  <Badge tone="warning"><AlertTriangle size={12} /> 模板提示</Badge>
+                ) : null}
+              </div>
+              <div className="selection-template-edit-grid">
                 <label className="field-stack">
-                  <span>Prompt 模板</span>
-                  <Textarea value={action.promptTemplate} onChange={(event) => updateAction(action.id, { promptTemplate: event.target.value })} />
-                  {warning ? <span className="form-hint">{warning}</span> : null}
+                  <span>短名</span>
+                  <Input
+                    value={selectedAction.label}
+                    maxLength={4}
+                    onChange={(event) => updateAction(selectedAction.id, { label: event.target.value })}
+                  />
                 </label>
-                <label className="settings-checks">
-                  <input type="checkbox" checked={action.enabled} onChange={(event) => updateAction(action.id, { enabled: event.target.checked })} />
+                <label className="field-stack">
+                  <span>描述</span>
+                  <Input
+                    value={selectedAction.description}
+                    onChange={(event) => updateAction(selectedAction.id, { description: event.target.value })}
+                  />
+                </label>
+                <label className="field-stack selection-template-prompt-field">
+                  <span>Prompt 模板</span>
+                  <Textarea
+                    value={selectedAction.promptTemplate}
+                    onChange={(event) => updateAction(selectedAction.id, { promptTemplate: event.target.value })}
+                  />
+                  {selectionTemplateWarning(selectedAction.promptTemplate) ? (
+                    <span className="form-hint">{selectionTemplateWarning(selectedAction.promptTemplate)}</span>
+                  ) : null}
+                </label>
+                <label className="settings-checks selection-template-edit-toggle">
+                  <input
+                    type="checkbox"
+                    checked={selectedAction.enabled}
+                    onChange={(event) => updateAction(selectedAction.id, { enabled: event.target.checked })}
+                  />
                   <span>在 Selection 动作条中显示</span>
                 </label>
               </div>
-            );
-          })}
+            </div>
+          ) : null}
         </div>
       </WorkbenchSection>
 
@@ -195,7 +345,10 @@ export default function PortalSelectionSettings({
           type="button"
           variant="outline"
           disabled={saving}
-          onClick={() => setSettingsDraft((draft) => ({ ...draft, selectionActions: DEFAULT_SELECTION_ACTIONS }))}
+          onClick={() => {
+            setSettingsDraft((draft) => ({ ...draft, selectionActions: DEFAULT_SELECTION_ACTIONS }));
+            setSelectedActionId(DEFAULT_SELECTION_ACTIONS[0]?.id ?? "");
+          }}
         >
           <RotateCcw size={15} /> 恢复默认动作
         </Button>

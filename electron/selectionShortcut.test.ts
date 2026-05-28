@@ -23,6 +23,19 @@ describe("Selection shortcut wiring", () => {
     expect(source).toContain('query.set("selection", "window")');
     expect(source).toContain("selection_window_show");
     expect(source).toContain("selection_window_hide");
+    expect(source).toContain("selection_window_layout");
+    expect(source).toContain("applySelectionWindowLayout");
+    expect(source).toContain("selectionWindowLayoutBounds");
+    expect(source).toContain("selectionDismissWindow");
+    expect(source).toContain("showSelectionDismissLayer");
+    expect(source).toContain("hideSelectionDismissLayer");
+    expect(source).toContain("registerSelectionEscapeShortcut");
+    expect(source).toContain("registerSelectionControlShortcuts");
+    expect(source).toContain("sendSelectionControl");
+    expect(source).toContain('"Esc"');
+    expect(source).toContain('"Left"');
+    expect(source).toContain('"Right"');
+    expect(source).toContain('"Return"');
     expect(source).toContain("selection_shortcut_reregister");
     expect(source).toContain("readSelectedText");
     expect(source).toContain("clipboard.readText");
@@ -36,6 +49,7 @@ describe("Selection shortcut wiring", () => {
     expect(source).toContain("selectionWindowOpenToken");
     expect(source).toContain("await loadSelectionWindow");
     expect(source).toContain("win.showInactive()");
+    expect(source).toContain("setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })");
     expect(source).not.toContain("win.show();\n  win.moveTop();\n  win.focus();");
     expect(source).toContain("globalShortcut.register(shortcut");
     expect(source).toContain("selection-event");

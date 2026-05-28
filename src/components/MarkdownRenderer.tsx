@@ -210,6 +210,7 @@ export function notifyThemeChange() {
 interface MarkdownRendererProps {
   content: string;
   streaming?: boolean;
+  progressive?: boolean;
   onFileOpen?: (filePath: string) => void;
 }
 
@@ -592,110 +593,112 @@ function MarkdownTable({ children }: { children?: ReactNode }) {
 /*  Renderer                                                           */
 /* ------------------------------------------------------------------ */
 
-export const MarkdownRenderer = memo(function MarkdownRenderer({ content, streaming = false, onFileOpen }: MarkdownRendererProps) {
+export const MarkdownRenderer = memo(function MarkdownRenderer({ content, streaming = false, progressive = false, onFileOpen }: MarkdownRendererProps) {
   if (streaming) {
-    // 短内容直接展示纯文本，避免闪烁
-    if (content.length < 200) {
+    if (!progressive) {
+      // 短内容直接展示纯文本，避免闪烁
+      if (content.length < 200) {
+        return (
+          <div className="markdown-body is-streaming">
+            <div className="streaming-markdown-text">{content}</div>
+          </div>
+        );
+      }
+      // 长内容：已稳定的前缀渲染 Markdown，正在流出的末尾展示纯文本
+      const splitPoint = Math.max(0, content.length - 200);
+      const stableContent = content.slice(0, splitPoint);
+      const streamingTail = content.slice(splitPoint);
       return (
         <div className="markdown-body is-streaming">
-          <div className="streaming-markdown-text">{content}</div>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              h1(props) {
+                return <MarkdownHeading level={1}>{props.children}</MarkdownHeading>;
+              },
+              h2(props) {
+                return <MarkdownHeading level={2}>{props.children}</MarkdownHeading>;
+              },
+              h3(props) {
+                return <MarkdownHeading level={3}>{props.children}</MarkdownHeading>;
+              },
+              h4(props) {
+                return <MarkdownHeading level={4}>{props.children}</MarkdownHeading>;
+              },
+              h5(props) {
+                return <MarkdownHeading level={5}>{props.children}</MarkdownHeading>;
+              },
+              h6(props) {
+                return <MarkdownHeading level={6}>{props.children}</MarkdownHeading>;
+              },
+              p(props) {
+                return <p className="md-p">{props.children}</p>;
+              },
+              ul(props) {
+                return <ul className="md-ul">{props.children}</ul>;
+              },
+              ol(props) {
+                return <ol className="md-ol">{props.children}</ol>;
+              },
+              li(props) {
+                return <li className="md-li">{props.children}</li>;
+              },
+              blockquote(props) {
+                return <blockquote className="md-blockquote">{props.children}</blockquote>;
+              },
+              hr() {
+                return <hr className="md-hr" />;
+              },
+              a(props) {
+                return (
+                  <a href={props.href} target="_blank" rel="noreferrer" className="md-a">
+                    {props.children}
+                  </a>
+                );
+              },
+              strong(props) {
+                return <strong className="md-strong">{props.children}</strong>;
+              },
+              em(props) {
+                return <em className="md-em">{props.children}</em>;
+              },
+              del(props) {
+                return <del className="md-del">{props.children}</del>;
+              },
+              code(props) {
+                const { className, children } = props;
+                const codeText = String(children).replace(/\n$/, "");
+                const { lang, filename } = extractMeta(className);
+                const match = /language-(\w+)/.exec(className || "");
+                if (match) {
+                  return (
+                    <CodeBlock code={codeText} lang={lang} filename={filename} streaming />
+                  );
+                }
+                const filePath = detectFilePath(codeText);
+                if (filePath) {
+                  return <FilePathChip filePath={filePath} onOpen={onFileOpen} />;
+                }
+                return <code className="md-inline-code">{children}</code>;
+              },
+              pre(props) {
+                return <>{props.children}</>;
+              },
+              table(props) {
+                return <MarkdownTable>{props.children}</MarkdownTable>;
+              },
+            }}
+          >
+            {stableContent}
+          </ReactMarkdown>
+          <span className="streaming-markdown-text">{streamingTail}</span>
         </div>
       );
     }
-    // 长内容：已稳定的前缀渲染 Markdown，正在流出的末尾展示纯文本
-    const splitPoint = Math.max(0, content.length - 200);
-    const stableContent = content.slice(0, splitPoint);
-    const streamingTail = content.slice(splitPoint);
-    return (
-      <div className="markdown-body is-streaming">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            h1(props) {
-              return <MarkdownHeading level={1}>{props.children}</MarkdownHeading>;
-            },
-            h2(props) {
-              return <MarkdownHeading level={2}>{props.children}</MarkdownHeading>;
-            },
-            h3(props) {
-              return <MarkdownHeading level={3}>{props.children}</MarkdownHeading>;
-            },
-            h4(props) {
-              return <MarkdownHeading level={4}>{props.children}</MarkdownHeading>;
-            },
-            h5(props) {
-              return <MarkdownHeading level={5}>{props.children}</MarkdownHeading>;
-            },
-            h6(props) {
-              return <MarkdownHeading level={6}>{props.children}</MarkdownHeading>;
-            },
-            p(props) {
-              return <p className="md-p">{props.children}</p>;
-            },
-            ul(props) {
-              return <ul className="md-ul">{props.children}</ul>;
-            },
-            ol(props) {
-              return <ol className="md-ol">{props.children}</ol>;
-            },
-            li(props) {
-              return <li className="md-li">{props.children}</li>;
-            },
-            blockquote(props) {
-              return <blockquote className="md-blockquote">{props.children}</blockquote>;
-            },
-            hr() {
-              return <hr className="md-hr" />;
-            },
-            a(props) {
-              return (
-                <a href={props.href} target="_blank" rel="noreferrer" className="md-a">
-                  {props.children}
-                </a>
-              );
-            },
-            strong(props) {
-              return <strong className="md-strong">{props.children}</strong>;
-            },
-            em(props) {
-              return <em className="md-em">{props.children}</em>;
-            },
-            del(props) {
-              return <del className="md-del">{props.children}</del>;
-            },
-            code(props) {
-              const { className, children } = props;
-              const codeText = String(children).replace(/\n$/, "");
-              const { lang, filename } = extractMeta(className);
-              const match = /language-(\w+)/.exec(className || "");
-              if (match) {
-                return (
-                  <CodeBlock code={codeText} lang={lang} filename={filename} streaming />
-                );
-              }
-              const filePath = detectFilePath(codeText);
-              if (filePath) {
-                return <FilePathChip filePath={filePath} onOpen={onFileOpen} />;
-              }
-              return <code className="md-inline-code">{children}</code>;
-            },
-            pre(props) {
-              return <>{props.children}</>;
-            },
-            table(props) {
-              return <MarkdownTable>{props.children}</MarkdownTable>;
-            },
-          }}
-        >
-          {stableContent}
-        </ReactMarkdown>
-        <span className="streaming-markdown-text">{streamingTail}</span>
-      </div>
-    );
   }
 
   return (
-    <div className="markdown-body">
+    <div className={`markdown-body ${streaming && progressive ? "is-streaming is-progressive" : ""}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -788,12 +791,13 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ content, stream
               return <code className="md-inline-code">{children}</code>;
             }
 
-            return <CodeBlock code={codeText} lang={lang} filename={filename} streaming={false} />;
+            return <CodeBlock code={codeText} lang={lang} filename={filename} streaming={streaming && progressive} />;
           },
         }}
       >
         {content}
       </ReactMarkdown>
+      {streaming && progressive ? <span className="streaming-markdown-text" aria-hidden="true" /> : null}
     </div>
   );
 });

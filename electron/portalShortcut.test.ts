@@ -30,9 +30,14 @@ describe("Portal shortcut wiring", () => {
     expect(source).toContain("registerGlobalShortcuts");
     expect(source).toContain("toggleMainWindow");
     expect(source).toContain("return registerGlobalShortcuts()");
-    expect(source).toContain('win.on("minimize" as any, (event: { preventDefault(): void }) => {');
-    expect(source).toContain("event.preventDefault();");
-    expect(source).toContain("win.hide();");
+    const mainWindowSource = source.slice(
+      source.indexOf("function createWindow"),
+      source.indexOf("function applyPortalWindowPin"),
+    );
+    expect(mainWindowSource).toContain("new BrowserWindow");
+    expect(mainWindowSource).not.toContain('win.on("minimize"');
+    expect(mainWindowSource).not.toContain("event.preventDefault();");
+    expect(mainWindowSource).not.toContain("win.hide();");
     expect(source).toContain("createPortalWindow");
     expect(source).toContain("if (portalWindow && !portalWindow.isDestroyed()) return portalWindow;");
     expect(source).toContain('query.set("portal", "capsule")');
@@ -44,7 +49,7 @@ describe("Portal shortcut wiring", () => {
     expect(source).toContain("portalWindowPinned");
     expect(source).toContain("applyPortalWindowPin");
     expect(source).toContain('setAlwaysOnTop(pinned, pinned ? "screen-saver" : "normal")');
-    expect(source).toContain("setVisibleOnAllWorkspaces(pinned, { visibleOnFullScreen: pinned })");
+    expect(source).toContain("setVisibleOnAllWorkspaces(pinned, { visibleOnFullScreen: pinned, skipTransformProcessType: true })");
     expect(source).toContain("moveTop()");
     expect(source).toContain("setAlwaysOnTop");
     expect(source).toContain("portal_shortcut_reregister");

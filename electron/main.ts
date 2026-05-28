@@ -86,6 +86,8 @@ type PermissionMode = "readOnly" | "workspaceWrite" | "fullAccess";
 type ToolTraceStream = "stdout" | "stderr" | "result" | "preview";
 type RuntimeTurnStartRequest = TurnStartRequest & { retryItemId?: string };
 type SelectedTextCapture = { text: string; error?: string };
+type SelectionWindowLayout = "actions" | "result" | "expanded" | "source";
+type SelectionControlAction = "close" | "previous" | "next" | "run";
 
 interface ToolTraceReporter {
   started(): void;
@@ -115,12 +117,15 @@ let terminalManager: TerminalManager;
 let agentBridge: AgentBridgeService;
 let portalWindow: BrowserWindow | undefined;
 let selectionWindow: BrowserWindow | undefined;
+let selectionDismissWindow: BrowserWindow | undefined;
 let selectionWindowOpenToken = 0;
+let selectionDismissArmedAfter = 0;
 let portalWindowPinned = true;
 let activatingPortalWindow = false;
 let registeredMainWindowShortcut: string | undefined;
 let registeredPortalShortcut: string | undefined;
 let registeredSelectionShortcut: string | undefined;
+let registeredSelectionControlShortcuts: string[] = [];
 const windows = new Set<BrowserWindow>();
 const mainWindows = new Set<BrowserWindow>();
 
@@ -407,6 +412,50 @@ function registerSelectionShortcut() {
   }
   if (ok) registeredSelectionShortcut = shortcut;
   return ok;
+}
+
+function sendSelectionControl(action: SelectionControlAction) {
+  const win = selectionWindow && !selectionWindow.isDestroyed() ? selectionWindow : undefined;
+  if (!win) return;
+  win.webContents.send("selection-event", {
+    runId: "",
+    event: "selection.control",
+    payload: { action },
+    createdAt: nowMillis(),
+  } satisfies SelectionEvent);
+}
+
+function unregisterSelectionControlShortcuts() {
+  for (const shortcut of registeredSelectionControlShortcuts) {
+    globalShortcut.unregister(shortcut);
+  }
+  registeredSelectionControlShortcuts = [];
+}
+
+function registerSelectionControlShortcuts() {
+  unregisterSelectionControlShortcuts();
+  const shortcuts: Array<[string, SelectionControlAction]> = [
+    ["Esc", "close"],
+    ["Left", "previous"],
+    ["Right", "next"],
+    ["Return", "run"],
+  ];
+  for (const [shortcut, action] of shortcuts) {
+    try {
+      if (globalShortcut.register(shortcut, () => {
+        if (action === "close") hideSelectionWindow();
+        else sendSelectionControl(action);
+      })) {
+        registeredSelectionControlShortcuts.push(shortcut);
+      }
+    } catch {
+      // Selection remains mouse-accessible when a temporary key cannot be registered.
+    }
+  }
+}
+
+function registerSelectionEscapeShortcut() {
+  registerSelectionControlShortcuts();
 }
 
 function registerGlobalShortcuts() {
@@ -3962,6 +4011,8 @@ function registerIpcHandlers() {
         case "selection_shortcut_reregister": return registerSelectionShortcut();
         case "selection_window_show": return showSelectionWindow();
         case "selection_window_hide": return hideSelectionWindow();
+        case "selection_window_dismiss_click": return handleSelectionDismissClick();
+        case "selection_window_layout": return applySelectionWindowLayout(args.layout);
         case "selection_run_action": return runSelectionAction(args.request);
         case "usage_dashboard": return storage.usageDashboard(args.request);
         case "usage_sync_external": return storage.syncExternalUsage();
@@ -4041,10 +4092,6 @@ function createWindow(workspaceId?: string, threadId?: string) {
   windows.add(win);
   mainWindows.add(win);
   attachExternalLinkHandlers(win);
-  win.on("minimize" as any, (event: { preventDefault(): void }) => {
-    event.preventDefault();
-    win.hide();
-  });
   win.on("closed", () => {
     windows.delete(win);
     mainWindows.delete(win);
@@ -4062,7 +4109,7 @@ function createWindow(workspaceId?: string, threadId?: string) {
 function applyPortalWindowPin(win: BrowserWindow, pinned: boolean) {
   if (process.platform === "darwin") {
     win.setAlwaysOnTop(pinned, pinned ? "screen-saver" : "normal");
-    win.setVisibleOnAllWorkspaces(pinned, { visibleOnFullScreen: pinned });
+    win.setVisibleOnAllWorkspaces(pinned, { visibleOnFullScreen: pinned, skipTransformProcessType: true });
   } else {
     win.setAlwaysOnTop(pinned);
   }
@@ -4163,6 +4210,36 @@ function clampSelectionWindowValue(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, Math.max(min, max)));
 }
 
+function selectionWindowLayoutBounds(layout: unknown) {
+  const layouts: Record<SelectionWindowLayout, { width: number; height: number }> = {
+    actions: { width: 340, height: 64 },
+    result: { width: 420, height: 292 },
+    expanded: { width: 420, height: 456 },
+    source: { width: 420, height: 560 },
+  };
+  if (layout === "result" || layout === "expanded" || layout === "source") return layouts[layout];
+  return layouts.actions;
+}
+
+function applySelectionWindowLayout(layout: unknown) {
+  const win = selectionWindow && !selectionWindow.isDestroyed() ? selectionWindow : undefined;
+  if (!win) return;
+  const next = selectionWindowLayoutBounds(layout);
+  const bounds = win.getBounds();
+  const display = screen.getDisplayNearestPoint({
+    x: Math.round(bounds.x + bounds.width / 2),
+    y: Math.round(bounds.y + bounds.height / 2),
+  });
+  const workArea = display.workArea;
+  const padding = 10;
+  win.setBounds({
+    x: clampSelectionWindowValue(bounds.x, workArea.x + padding, workArea.x + workArea.width - next.width - padding),
+    y: clampSelectionWindowValue(bounds.y, workArea.y + padding, workArea.y + workArea.height - next.height - padding),
+    width: next.width,
+    height: next.height,
+  }, false);
+}
+
 function positionSelectionWindowNearCursor(win: BrowserWindow) {
   const cursor = screen.getCursorScreenPoint();
   const display = screen.getDisplayNearestPoint(cursor);
@@ -4179,13 +4256,122 @@ function positionSelectionWindowNearCursor(win: BrowserWindow) {
   }, false);
 }
 
+function selectionDismissHtml() {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html, body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.001);
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      function dismissSelection() {
+        window.anyJumper?.invoke("selection_window_dismiss_click").catch(() => undefined);
+      }
+      document.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        dismissSelection();
+      }, true);
+      document.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        dismissSelection();
+      }, true);
+      document.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        dismissSelection();
+      }, true);
+    </script>
+  </body>
+</html>`;
+}
+
+function createSelectionDismissWindow() {
+  if (selectionDismissWindow && !selectionDismissWindow.isDestroyed()) return selectionDismissWindow;
+  const win = new BrowserWindow({
+    width: 1,
+    height: 1,
+    title: "Any Jumper Selection Dismiss",
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    hasShadow: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    movable: false,
+    focusable: true,
+    acceptFirstMouse: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(mainDir, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+  selectionDismissWindow = win;
+  void win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(selectionDismissHtml())}`);
+  win.on("closed", () => {
+    if (selectionDismissWindow === win) selectionDismissWindow = undefined;
+  });
+  return win;
+}
+
+function showSelectionDismissLayer(anchor: BrowserWindow) {
+  const anchorBounds = anchor.getBounds();
+  const display = screen.getDisplayNearestPoint({
+    x: Math.round(anchorBounds.x + anchorBounds.width / 2),
+    y: Math.round(anchorBounds.y + anchorBounds.height / 2),
+  });
+  const workArea = display.workArea;
+  const win = createSelectionDismissWindow();
+  win.setIgnoreMouseEvents(false);
+  win.setBounds({
+    x: workArea.x,
+    y: workArea.y,
+    width: workArea.width,
+    height: workArea.height,
+  }, false);
+  if (process.platform === "darwin") {
+    win.setAlwaysOnTop(true, "floating");
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+  } else {
+    win.setAlwaysOnTop(true);
+  }
+  selectionDismissArmedAfter = Date.now() + 180;
+  win.showInactive();
+  win.moveTop();
+}
+
+function hideSelectionDismissLayer() {
+  selectionDismissArmedAfter = 0;
+  if (selectionDismissWindow && !selectionDismissWindow.isDestroyed()) {
+    selectionDismissWindow.hide();
+  }
+}
+
+function handleSelectionDismissClick() {
+  if (Date.now() < selectionDismissArmedAfter) return false;
+  hideSelectionWindow();
+  return true;
+}
+
 function createSelectionWindow() {
   if (selectionWindow && !selectionWindow.isDestroyed()) return selectionWindow;
+  const actionBounds = selectionWindowLayoutBounds("actions");
   const win = new BrowserWindow({
-    width: 420,
-    height: 260,
-    minWidth: 320,
-    minHeight: 80,
+    width: actionBounds.width,
+    height: actionBounds.height,
+    minWidth: 300,
+    minHeight: 56,
     title: "Any Jumper Selection",
     frame: false,
     transparent: true,
@@ -4207,11 +4393,13 @@ function createSelectionWindow() {
   windows.add(win);
   attachExternalLinkHandlers(win);
   win.on("blur", () => {
-    if (!win.isDestroyed()) win.hide();
+    if (!win.isDestroyed() && win.isVisible()) hideSelectionWindow();
   });
   win.on("closed", () => {
     windows.delete(win);
     if (selectionWindow === win) selectionWindow = undefined;
+    hideSelectionDismissLayer();
+    unregisterSelectionControlShortcuts();
   });
 
   return win;
@@ -4228,18 +4416,23 @@ async function showSelectionWindow() {
   const win = selectionWindow && !selectionWindow.isDestroyed() ? selectionWindow : createSelectionWindow();
   await loadSelectionWindow(win, capture.text, capture.error);
   if (openToken !== selectionWindowOpenToken || win.isDestroyed()) return;
+  applySelectionWindowLayout("actions");
   positionSelectionWindowNearCursor(win);
+  showSelectionDismissLayer(win);
   if (process.platform === "darwin") {
     win.setAlwaysOnTop(true, "screen-saver");
-    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
   } else {
     win.setAlwaysOnTop(true);
   }
   win.showInactive();
   win.moveTop();
+  registerSelectionControlShortcuts();
 }
 
 function hideSelectionWindow() {
+  unregisterSelectionControlShortcuts();
+  hideSelectionDismissLayer();
   if (selectionWindow && !selectionWindow.isDestroyed()) selectionWindow.hide();
 }
 

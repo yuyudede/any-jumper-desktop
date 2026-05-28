@@ -30,6 +30,8 @@ import type {
   WorkspaceRequest,
 } from "../types";
 
+type SelectionWindowLayout = "actions" | "result" | "expanded" | "source";
+
 function bridge() {
   if (!window.anyJumper) {
     throw new Error("Electron bridge 未初始化，请在桌面应用中运行");
@@ -249,6 +251,12 @@ export const desktopApi = {
   selectionHide() {
     const api = bridge();
     return api.portalInvoke ? api.portalInvoke<void>("selection_window_hide") : invoke<void>("selection_window_hide");
+  },
+  selectionSetWindowLayout(layout: SelectionWindowLayout) {
+    const api = bridge();
+    return api.portalInvoke
+      ? api.portalInvoke<void>("selection_window_layout", { layout })
+      : invoke<void>("selection_window_layout", { layout });
   },
   selectionRunAction(request: SelectionRunRequest) {
     return invoke<SelectionRunResult>("selection_run_action", { request });
